@@ -1,9 +1,25 @@
 import { simpleGit, SimpleGit } from 'simple-git'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { mkdir, rm, access } from 'fs/promises'
+import { mkdir, rm, access, writeFile } from 'fs/promises'
 
 const REPOS_BASE_DIR = join(tmpdir(), 'scenery-repos')
+
+// Only clone directories likely to contain React components (saves memory on large repos)
+const SPARSE_CHECKOUT_PATHS = [
+  'src',
+  'components',
+  'lib',
+  'app',
+  'pages',
+  'ui',
+  'packages',
+  'package.json',
+  'tsconfig.json',
+]
+
+// Timeout for git operations (45 seconds - leave buffer for Vercel's 60s limit)
+const GIT_TIMEOUT_MS = 45000
 
 export function getRepoPath(userId: string, projectId: string): string {
   return join(REPOS_BASE_DIR, userId, projectId)
@@ -28,7 +44,8 @@ export async function cloneRepo(
   localPath: string,
   accessToken?: string
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const git: SimpleGit = simpleGit()
+  // Configure git with timeout to prevent hanging on large repos
+  const git: SimpleGit = simpleGit({ timeout: { block: GIT_TIMEOUT_MS } })
 
   // Construct authenticated URL for private repos
   let authUrl = cloneUrl
@@ -51,11 +68,24 @@ export async function cloneRepo(
     // Create parent directory
     await mkdir(localPath, { recursive: true })
 
-    // Clone with shallow depth for faster clones
+    // Use sparse checkout + shallow clone for minimal memory usage on large repos
+    // Step 1: Initialize empty repo with sparse checkout
     await git.clone(authUrl, localPath, [
       '--depth', '1',
       '--single-branch',
+      '--filter=blob:none',  // Don't download blobs until needed (partial clone)
+      '--sparse',            // Enable sparse checkout
     ])
+
+    // Step 2: Configure sparse checkout paths (only component directories)
+    const repoGit = simpleGit(localPath, { timeout: { block: GIT_TIMEOUT_MS } })
+
+    // Write sparse-checkout config to only get source directories
+    const sparseCheckoutPath = join(localPath, '.git', 'info', 'sparse-checkout')
+    await writeFile(sparseCheckoutPath, SPARSE_CHECKOUT_PATHS.join('\n') + '\n')
+
+    // Apply sparse checkout
+    await repoGit.raw(['sparse-checkout', 'reapply'])
 
     return { success: true }
   } catch (error) {
@@ -74,6 +104,9 @@ export async function cloneRepo(
     }
     if (message.includes('not found') || message.includes('404')) {
       return { success: false, error: 'Repository not found. Check the URL and your access permissions.' }
+    }
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return { success: false, error: 'Repository too large or network slow. Try a smaller repo.' }
     }
 
     return { success: false, error: 'Failed to clone repository' }
