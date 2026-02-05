@@ -155,85 +155,9 @@ export async function getRepositoryConnection(
   return { success: true, data: data as RepositoryConnection }
 }
 
-/**
- * For demo projects, materialize real DB rows (project + repo connection)
- * so the entire existing flow works unchanged.
- */
-async function materializeDemoProject(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  projectId: string
-): Promise<ActionResult<{ realProjectId: string; connectionId: string }>> {
-  const { getDemoProject } = await import('@/lib/demo-projects')
-  const demo = getDemoProject(projectId)
-  if (!demo?.repo_url) return { success: false, error: 'No repository connected' }
-
-  const match = demo.repo_url.match(/github\.com\/([^/]+)\/([^/]+)/)
-  if (!match) return { success: false, error: 'Invalid repo URL' }
-
-  // Check if already materialized (user may have cloned before)
-  const { data: existingProject } = await supabase
-    .from('projects')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('name', demo.name)
-    .eq('repo_url', demo.repo_url)
-    .single()
-
-  if (existingProject) {
-    const { data: existingConn } = await supabase
-      .from('repository_connections')
-      .select('id')
-      .eq('project_id', existingProject.id)
-      .single()
-    if (existingConn) {
-      return { success: true, data: { realProjectId: existingProject.id, connectionId: existingConn.id } }
-    }
-  }
-
-  // Create real project
-  const { data: newProject, error: projError } = await supabase
-    .from('projects')
-    .insert({
-      user_id: userId,
-      name: demo.name,
-      description: demo.description,
-      repo_url: demo.repo_url,
-    })
-    .select('id')
-    .single()
-
-  if (projError || !newProject) {
-    console.error('[materialize] Failed to create project:', projError)
-    return { success: false, error: 'Failed to create project' }
-  }
-
-  // Create real repo connection
-  const { data: newConn, error: connError } = await supabase
-    .from('repository_connections')
-    .insert({
-      project_id: newProject.id,
-      owner: match[1],
-      name: match[2],
-      default_branch: 'main',
-      is_private: false,
-      clone_url: `${demo.repo_url}.git`,
-    })
-    .select('id')
-    .single()
-
-  if (connError || !newConn) {
-    console.error('[materialize] Failed to create connection:', connError)
-    return { success: false, error: 'Failed to create repository connection' }
-  }
-
-  console.log(`[materialize] Demo ${projectId} -> real project ${newProject.id}, conn ${newConn.id}`)
-  return { success: true, data: { realProjectId: newProject.id, connectionId: newConn.id } }
-}
-
 export async function cloneConnectedRepository(
   projectId: string
-): Promise<ActionResult<{ localPath: string; realProjectId?: string }>> {
+): Promise<ActionResult<{ localPath: string }>> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -241,39 +165,18 @@ export async function cloneConnectedRepository(
     return { success: false, error: 'Sign in to clone repositories' }
   }
 
-  let actualProjectId = projectId
-  let connection: RepositoryConnection
+  // Get repository connection
+  const { data: connectionData, error: connError } = await supabase
+    .from('repository_connections')
+    .select('*')
+    .eq('project_id', projectId)
+    .single()
 
-  if (projectId.startsWith('demo-')) {
-    // Materialize demo into real DB rows
-    const matResult = await materializeDemoProject(supabase, user.id, projectId)
-    if (!matResult.success) return { success: false, error: matResult.error }
-
-    actualProjectId = matResult.data.realProjectId
-
-    // Fetch the real connection
-    const { data: connectionData } = await supabase
-      .from('repository_connections')
-      .select('*')
-      .eq('id', matResult.data.connectionId)
-      .single()
-
-    if (!connectionData) return { success: false, error: 'Connection not found' }
-    connection = connectionData as RepositoryConnection
-  } else {
-    // Get repository connection
-    const { data: connectionData, error: connError } = await supabase
-      .from('repository_connections')
-      .select('*')
-      .eq('project_id', projectId)
-      .single()
-
-    if (connError || !connectionData) {
-      return { success: false, error: 'No repository connected' }
-    }
-
-    connection = connectionData as RepositoryConnection
+  if (connError || !connectionData) {
+    return { success: false, error: 'No repository connected' }
   }
+
+  const connection = connectionData as RepositoryConnection
 
   // Get GitHub token for private repos
   let accessToken: string | undefined
@@ -291,11 +194,11 @@ export async function cloneConnectedRepository(
   }
 
   // Ensure user directory exists
-  console.log(`[clone] Starting clone for ${actualProjectId}, userId=${user.id}, url=${connection.clone_url}`)
+  console.log(`[clone] Starting clone for ${projectId}, userId=${user.id}, url=${connection.clone_url}`)
   await ensureRepoDir(user.id)
 
   // Clone the repository
-  const localPath = getRepoPath(user.id, actualProjectId)
+  const localPath = getRepoPath(user.id, projectId)
   console.log(`[clone] Cloning to ${localPath}`)
   const result = await cloneRepo(connection.clone_url, localPath, accessToken)
 
@@ -303,7 +206,7 @@ export async function cloneConnectedRepository(
     console.error(`[clone] Clone failed:`, result.error)
     return { success: false, error: result.error }
   }
-  console.log(`[clone] Clone succeeded for ${actualProjectId}`)
+  console.log(`[clone] Clone succeeded for ${projectId}`)
 
   // Update connection with local path and sync timestamp
   const { error: updateError } = await supabase
@@ -324,9 +227,9 @@ export async function cloneConnectedRepository(
     owner: connection.owner,
   }).catch(err => console.error('Background discovery failed:', err))
 
-  revalidatePath(`/protected/projects/${actualProjectId}`)
+  revalidatePath(`/protected/projects/${projectId}`)
   revalidatePath('/protected')
-  return { success: true, data: { localPath, realProjectId: projectId.startsWith('demo-') ? actualProjectId : undefined } }
+  return { success: true, data: { localPath } }
 }
 
 export async function syncRepository(

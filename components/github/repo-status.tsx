@@ -176,14 +176,7 @@ export function RepoStatus({ connection, projectId }: RepoStatusProps) {
         setDiscoveryPhase('idle')
         return
       }
-      // Clone succeeded — if demo was materialized, redirect to real project
-      if (result.data.realProjectId) {
-        stopPolling()
-        if (elapsedRef.current) clearInterval(elapsedRef.current)
-        router.push(`/protected/projects/${result.data.realProjectId}`)
-        return
-      }
-      // Normal clone — discovery runs in background, start polling
+      // Clone succeeded — discovery runs in background, start polling
       setIsCloning(false)
       if (elapsedRef.current) clearInterval(elapsedRef.current)
       startDiscoveryPolling('scanning')

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { projectSchema, type ProjectInput } from '@/lib/validations/project'
 import type { Database } from '@/types/database.types'
-import { DEMO_PROJECTS, isDemoProject, getDemoProject, isRealDemoProject, DEMO_PROJECT_IDS } from '@/lib/demo-projects'
+import { isDemoProject, DEMO_PROJECT_IDS } from '@/lib/demo-projects'
 
 export type Project = Database['public']['Tables']['projects']['Row']
 
@@ -16,8 +16,8 @@ export async function getProjects(): Promise<ActionResult<Project[]>> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Fetch real demo projects if configured
-  let realDemoProjects: Project[] = []
+  // Fetch demo projects if configured
+  let demoProjects: Project[] = []
   if (DEMO_PROJECT_IDS.length > 0) {
     const { data: demoData } = await supabase
       .from('projects')
@@ -25,14 +25,13 @@ export async function getProjects(): Promise<ActionResult<Project[]>> {
       .in('id', DEMO_PROJECT_IDS)
 
     if (demoData) {
-      realDemoProjects = demoData as Project[]
+      demoProjects = demoData as Project[]
     }
   }
 
-  // For anonymous users, show real demo projects or fallback demos
+  // For anonymous users, show demo projects only
   if (!user) {
-    const demosToShow = realDemoProjects.length > 0 ? realDemoProjects : DEMO_PROJECTS
-    return { success: true, data: demosToShow }
+    return { success: true, data: demoProjects }
   }
 
   // For signed-in users, show their projects + demo projects
@@ -48,9 +47,7 @@ export async function getProjects(): Promise<ActionResult<Project[]>> {
 
   // Add demos that aren't already in user's projects
   const userProjectIds = new Set(data.map(p => p.id))
-  const demosToAdd = realDemoProjects.length > 0
-    ? realDemoProjects.filter(d => !userProjectIds.has(d.id))
-    : DEMO_PROJECTS
+  const demosToAdd = demoProjects.filter(d => !userProjectIds.has(d.id))
 
   return { success: true, data: [...(data as Project[]), ...demosToAdd] }
 }
@@ -58,8 +55,8 @@ export async function getProjects(): Promise<ActionResult<Project[]>> {
 export async function getProject(projectId: string): Promise<ActionResult<Project>> {
   const supabase = await createClient()
 
-  // Check if it's a real demo project (in DEMO_PROJECT_IDS) - allow anonymous access
-  if (isRealDemoProject(projectId)) {
+  // Demo projects (in DEMO_PROJECT_IDS) allow anonymous access
+  if (isDemoProject(projectId)) {
     const { data, error } = await supabase
       .from('projects')
       .select('*')
@@ -70,13 +67,6 @@ export async function getProject(projectId: string): Promise<ActionResult<Projec
       return { success: false, error: 'Project not found' }
     }
     return { success: true, data: data as Project }
-  }
-
-  // Fallback demo projects (demo-1, demo-2 placeholders)
-  if (isDemoProject(projectId)) {
-    const demo = getDemoProject(projectId)
-    if (demo) return { success: true, data: demo }
-    return { success: false, error: 'Project not found' }
   }
 
   // Regular projects require authentication

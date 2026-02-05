@@ -1,6 +1,6 @@
 'use server';
 
-import { readFile, writeFile, access, mkdir } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import path from 'path';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -16,8 +16,7 @@ import {
 import { extractInteractiveElements } from '@/lib/component-discovery/extract-interactive-elements';
 import { propsToJsonSchema } from '@/lib/component-discovery/props-to-json-schema';
 import type { Json } from '@/types/database.types';
-import { cloneRepo, repoExists, getRepoPath } from '@/lib/github/clone';
-import { getDemoProject, isRealDemoProject, isDemoProject } from '@/lib/demo-projects';
+import { isDemoProject } from '@/lib/demo-projects';
 
 /**
  * ComponentInfo with database ID
@@ -312,18 +311,9 @@ async function linkCompoundComponents(
 export async function getProjectComponents(projectId: string): Promise<ComponentWithId[]> {
   const supabase = await createClient();
 
-  // For demo projects (real ones in DEMO_PROJECT_IDS), allow anonymous read
-  // For fallback demo-* projects, use discovery
-  const isDemo = isDemoProject(projectId);
-  const isRealDemo = isRealDemoProject(projectId);
-
-  // Fallback demo projects (demo-1, demo-2) without real Supabase data
-  if (isDemo && !isRealDemo && projectId.startsWith('demo-')) {
-    return discoverDemoComponents(projectId);
-  }
-
-  // For regular projects, require authentication
-  if (!isDemo) {
+  // Demo projects (in DEMO_PROJECT_IDS) allow anonymous read
+  // Regular projects require authentication
+  if (!isDemoProject(projectId)) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return [];
   }
@@ -368,125 +358,6 @@ export async function getProjectComponents(projectId: string): Promise<Component
     relatedComponents: (c.related_components as string[] | null) ?? undefined,
     analysisError: c.analysis_error ?? undefined,
   }));
-}
-
-/**
- * Clones demo public repos and discovers components.
- * Results are cached in the repo directory to avoid re-cloning.
- */
-async function discoverDemoComponents(projectId: string): Promise<ComponentWithId[]> {
-  const project = getDemoProject(projectId);
-  if (!project || !project.repo_url) {
-    console.error(`[demo] Project ${projectId} not found or has no repo_url`);
-    return [];
-  }
-
-  // Parse repo info from URL
-  const urlParts = project.repo_url.replace('https://github.com/', '').split('/');
-  const owner = urlParts[0];
-  const repoName = urlParts[1];
-
-  // Use demo user path for cloned repos
-  const localPath = getRepoPath('demo', projectId);
-  const cachePath = path.join(localPath, '.scenery-cache.json');
-
-  // Check if we have cached results
-  try {
-    await access(cachePath);
-    const cached = JSON.parse(await readFile(cachePath, 'utf-8'));
-    if (cached.components && cached.components.length > 0) {
-      console.log(`[demo] Using cached components for ${projectId}`);
-      return cached.components;
-    }
-  } catch {
-    // No cache, proceed with discovery
-  }
-
-  // Clone the public repo (no token needed)
-  console.log(`[demo] Cloning ${project.repo_url} for ${projectId}`);
-  const exists = await repoExists(localPath);
-  if (!exists) {
-    const cloneResult = await cloneRepo(project.repo_url, localPath);
-    if (!cloneResult.success) {
-      console.error(`[demo] Clone failed:`, cloneResult.error);
-      return [];
-    }
-  }
-
-  // Scan for components
-  console.log(`[demo] Scanning ${localPath} for components`);
-  const { components, errors } = await scanRepository(localPath);
-  console.log(`[demo] Found ${components.length} components, ${errors.length} errors`);
-
-  if (components.length === 0) {
-    return [];
-  }
-
-  // Read source code for preview generation
-  const sourceCodeMap: Record<string, string> = {};
-  const uniqueFilePaths = [...new Set(components.map(c => c.filePath))];
-  await Promise.all(
-    uniqueFilePaths.map(async (filePath) => {
-      try {
-        sourceCodeMap[filePath] = await readFile(path.join(localPath, filePath), 'utf-8');
-      } catch { /* skip */ }
-    })
-  );
-
-  const repoContext: RepoContext = { name: repoName, owner };
-
-  // Run AI analysis if available
-  const analyzedComponents: ComponentInfo[] = [...components];
-  if (process.env.GEMINI_API_KEY) {
-    console.log(`[demo] Running AI analysis on ${components.length} components`);
-
-    // Phase A: Categorize + demo props
-    for (let i = 0; i < components.length; i++) {
-      try {
-        const analyzed = await analyzeComponent(components[i], repoContext);
-        analyzedComponents[i] = analyzed;
-      } catch (err) {
-        console.error(`[demo] Analysis failed for ${components[i].componentName}:`, err);
-      }
-    }
-
-    // Phase B: Generate preview HTML
-    for (let i = 0; i < analyzedComponents.length; i++) {
-      const comp = analyzedComponents[i];
-      const sourceCode = sourceCodeMap[comp.filePath];
-
-      try {
-        const previewResult = await generatePreviewHtml(comp, repoContext, sourceCode);
-        if (previewResult?.html) {
-          const interactiveElements = extractInteractiveElements(previewResult.html);
-          analyzedComponents[i] = {
-            ...comp,
-            previewHtml: previewResult.html,
-            interactiveElements: interactiveElements.length > 0 ? interactiveElements : undefined,
-          };
-        }
-      } catch (err) {
-        console.error(`[demo] Preview generation failed for ${comp.componentName}:`, err);
-      }
-    }
-  }
-
-  // Convert to ComponentWithId
-  const result: ComponentWithId[] = analyzedComponents.map((c, idx) => ({
-    ...c,
-    id: `${projectId}-comp-${idx}`,
-  }));
-
-  // Cache results
-  try {
-    await mkdir(path.dirname(cachePath), { recursive: true });
-    await writeFile(cachePath, JSON.stringify({ components: result, timestamp: Date.now() }));
-    console.log(`[demo] Cached ${result.length} components for ${projectId}`);
-  } catch (err) {
-    console.error(`[demo] Failed to cache:`, err);
-  }
-
-  return result;
 }
 
 export async function retryFailedComponents(repositoryId: string): Promise<{

@@ -39,8 +39,30 @@ export interface CompositionData {
 export async function getOrCreateComposition(
   projectId: string
 ): Promise<CompositionData | null> {
-  // Demo projects get an in-memory default composition
-  if (isDemoProject(projectId)) {
+  const supabase = await createClient();
+  const isDemo = isDemoProject(projectId);
+
+  // Demo projects allow anonymous read of existing compositions
+  if (isDemo) {
+    const { data: existing } = await supabase
+      .from('compositions')
+      .select('*')
+      .eq('project_id', projectId)
+      .single();
+
+    if (existing) {
+      return {
+        id: existing.id,
+        projectId: existing.project_id,
+        name: existing.name,
+        tracks: (existing.tracks as unknown as Track[]) ?? [],
+        durationInFrames: existing.duration_in_frames,
+        fps: existing.fps,
+        width: existing.width,
+        height: existing.height,
+      };
+    }
+    // No composition exists for demo - return default for viewing
     return {
       id: `demo-comp-${projectId}`,
       projectId,
@@ -52,8 +74,6 @@ export async function getOrCreateComposition(
       height: 1080,
     };
   }
-
-  const supabase = await createClient();
 
   const {
     data: { user },
