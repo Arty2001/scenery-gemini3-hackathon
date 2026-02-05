@@ -308,6 +308,10 @@ async function linkCompoundComponents(
 }
 
 export async function getProjectComponents(projectId: string): Promise<ComponentWithId[]> {
+  // Handle demo projects with mock components for anonymous users
+  if (projectId.startsWith('demo-')) {
+    return getDemoComponents(projectId);
+  }
 
   const supabase = await createClient();
 
@@ -354,6 +358,109 @@ export async function getProjectComponents(projectId: string): Promise<Component
     relatedComponents: (c.related_components as string[] | null) ?? undefined,
     analysisError: c.analysis_error ?? undefined,
   }));
+}
+
+/**
+ * Returns mock components for demo projects so anonymous users can explore the product
+ */
+function getDemoComponents(projectId: string): ComponentWithId[] {
+  if (projectId === 'demo-1') {
+    // Expense Tracker demo components
+    return [
+      {
+        id: 'demo-comp-1',
+        filePath: 'src/components/ExpenseCard.tsx',
+        componentName: 'ExpenseCard',
+        displayName: 'Expense Card',
+        description: 'Displays a single expense with amount, category, and date',
+        category: 'display',
+        categoryConfidence: 'high',
+        props: [
+          { name: 'amount', type: 'number', required: true },
+          { name: 'category', type: 'string', required: true },
+          { name: 'date', type: 'string', required: true },
+        ],
+        demoProps: { amount: 42.99, category: 'Food', date: '2024-01-15' },
+        previewHtml: `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;padding:20px;background:#f5f5f5}.card{background:white;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);max-width:300px}.amount{font-size:24px;font-weight:700;color:#1a1a1a}.category{display:inline-block;background:#e8f5e9;color:#2e7d32;padding:4px 12px;border-radius:20px;font-size:14px;margin-top:8px}.date{color:#666;font-size:14px;margin-top:8px}</style></head><body><div class="card"><div class="amount">$42.99</div><span class="category">Food</span><div class="date">Jan 15, 2024</div></div></body></html>`,
+        interactiveElements: [
+          { tag: 'div', selector: '.card', type: 'container', label: 'Expense Card' },
+        ],
+      },
+      {
+        id: 'demo-comp-2',
+        filePath: 'src/components/AddExpenseButton.tsx',
+        componentName: 'AddExpenseButton',
+        displayName: 'Add Expense Button',
+        description: 'Primary action button to add a new expense',
+        category: 'input',
+        categoryConfidence: 'high',
+        props: [
+          { name: 'onClick', type: 'function', required: false },
+        ],
+        demoProps: {},
+        previewHtml: `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;padding:20px;background:#f5f5f5}button{background:#2563eb;color:white;border:none;padding:12px 24px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background 0.2s}button:hover{background:#1d4ed8}button svg{width:20px;height:20px}</style></head><body><button data-interactive="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Expense</button></body></html>`,
+        interactiveElements: [
+          { tag: 'button', selector: 'button', type: 'button', label: 'Add Expense' },
+        ],
+      },
+      {
+        id: 'demo-comp-3',
+        filePath: 'src/components/ExpenseChart.tsx',
+        componentName: 'ExpenseChart',
+        displayName: 'Expense Chart',
+        description: 'Visual chart showing expense breakdown by category',
+        category: 'display',
+        categoryConfidence: 'high',
+        props: [
+          { name: 'data', type: 'array', required: true },
+        ],
+        demoProps: { data: [] },
+        previewHtml: `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;padding:20px;background:#f5f5f5}.chart{background:white;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}.title{font-size:18px;font-weight:600;margin-bottom:16px}.bars{display:flex;flex-direction:column;gap:12px}.bar-row{display:flex;align-items:center;gap:12px}.bar-label{width:80px;font-size:14px;color:#666}.bar-container{flex:1;height:24px;background:#f0f0f0;border-radius:4px;overflow:hidden}.bar{height:100%;border-radius:4px}.bar.food{width:65%;background:#4caf50}.bar.transport{width:25%;background:#2196f3}.bar.shopping{width:45%;background:#ff9800}</style></head><body><div class="chart"><div class="title">Spending by Category</div><div class="bars"><div class="bar-row"><span class="bar-label">Food</span><div class="bar-container"><div class="bar food"></div></div></div><div class="bar-row"><span class="bar-label">Transport</span><div class="bar-container"><div class="bar transport"></div></div></div><div class="bar-row"><span class="bar-label">Shopping</span><div class="bar-container"><div class="bar shopping"></div></div></div></div></div></body></html>`,
+        interactiveElements: [],
+      },
+    ];
+  } else if (projectId === 'demo-2') {
+    // Workout Tracker demo components
+    return [
+      {
+        id: 'demo-comp-4',
+        filePath: 'src/components/WorkoutCard.tsx',
+        componentName: 'WorkoutCard',
+        displayName: 'Workout Card',
+        description: 'Displays workout details with exercise name and stats',
+        category: 'display',
+        categoryConfidence: 'high',
+        props: [
+          { name: 'name', type: 'string', required: true },
+          { name: 'duration', type: 'number', required: true },
+          { name: 'calories', type: 'number', required: true },
+        ],
+        demoProps: { name: 'Morning Run', duration: 30, calories: 320 },
+        previewHtml: `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;padding:20px;background:#f5f5f5}.card{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;padding:20px;color:white;max-width:280px}.name{font-size:20px;font-weight:700;margin-bottom:16px}.stats{display:flex;gap:20px}.stat{text-align:center}.stat-value{font-size:24px;font-weight:700}.stat-label{font-size:12px;opacity:0.8;margin-top:4px}</style></head><body><div class="card"><div class="name">Morning Run</div><div class="stats"><div class="stat"><div class="stat-value">30</div><div class="stat-label">minutes</div></div><div class="stat"><div class="stat-value">320</div><div class="stat-label">calories</div></div></div></div></body></html>`,
+        interactiveElements: [
+          { tag: 'div', selector: '.card', type: 'container', label: 'Workout Card' },
+        ],
+      },
+      {
+        id: 'demo-comp-5',
+        filePath: 'src/components/StartWorkoutButton.tsx',
+        componentName: 'StartWorkoutButton',
+        displayName: 'Start Workout Button',
+        description: 'Button to begin a new workout session',
+        category: 'input',
+        categoryConfidence: 'high',
+        props: [
+          { name: 'onClick', type: 'function', required: false },
+        ],
+        demoProps: {},
+        previewHtml: `<!DOCTYPE html><html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;padding:20px;background:#f5f5f5}button{background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white;border:none;padding:16px 32px;border-radius:50px;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:10px;box-shadow:0 4px 15px rgba(245,87,108,0.4);transition:transform 0.2s,box-shadow 0.2s}button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(245,87,108,0.5)}button svg{width:24px;height:24px}</style></head><body><button data-interactive="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Start Workout</button></body></html>`,
+        interactiveElements: [
+          { tag: 'button', selector: 'button', type: 'button', label: 'Start Workout' },
+        ],
+      },
+    ];
+  }
+  return [];
 }
 
 export async function retryFailedComponents(repositoryId: string): Promise<{
