@@ -17,7 +17,7 @@ import { extractInteractiveElements } from '@/lib/component-discovery/extract-in
 import { propsToJsonSchema } from '@/lib/component-discovery/props-to-json-schema';
 import type { Json } from '@/types/database.types';
 import { cloneRepo, repoExists, getRepoPath } from '@/lib/github/clone';
-import { getDemoProject } from '@/lib/demo-projects';
+import { getDemoProject, isRealDemoProject, isDemoProject } from '@/lib/demo-projects';
 
 /**
  * ComponentInfo with database ID
@@ -310,17 +310,25 @@ async function linkCompoundComponents(
 }
 
 export async function getProjectComponents(projectId: string): Promise<ComponentWithId[]> {
-  // Handle demo projects - clone public repos and discover components
-  if (projectId.startsWith('demo-')) {
+  const supabase = await createClient();
+
+  // For demo projects (real ones in DEMO_PROJECT_IDS), allow anonymous read
+  // For fallback demo-* projects, use discovery
+  const isDemo = isDemoProject(projectId);
+  const isRealDemo = isRealDemoProject(projectId);
+
+  // Fallback demo projects (demo-1, demo-2) without real Supabase data
+  if (isDemo && !isRealDemo && projectId.startsWith('demo-')) {
     return discoverDemoComponents(projectId);
   }
 
-  const supabase = await createClient();
+  // For regular projects, require authentication
+  if (!isDemo) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return [];
+  }
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return [];
-
-  // Get repository for this project
+  // Get repository for this project (works for both real demo and regular projects)
   const { data: repo } = await supabase
     .from('repository_connections')
     .select('id')
