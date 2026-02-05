@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  cacheComponents: false,
+  output: "standalone", // Required for Docker deployment
   serverExternalPackages: ["esbuild"],
 };
 

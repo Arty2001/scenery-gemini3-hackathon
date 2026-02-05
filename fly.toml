@@ -1,0 +1,25 @@
+app = "scenery-gemini3"
+primary_region = "iad"
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  REPOS_BASE_DIR = "/data/repos"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2
+
+[mounts]
+  source = "repos_data"
+  destination = "/data"

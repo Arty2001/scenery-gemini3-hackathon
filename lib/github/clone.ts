@@ -3,7 +3,8 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { mkdir, rm, access, writeFile } from 'fs/promises'
 
-const REPOS_BASE_DIR = join(tmpdir(), 'scenery-repos')
+// Use persistent storage on Fly.io, fallback to temp dir locally
+const REPOS_BASE_DIR = process.env.REPOS_BASE_DIR || join(tmpdir(), 'scenery-repos')
 
 // Only clone directories likely to contain React components (saves memory on large repos)
 const SPARSE_CHECKOUT_PATHS = [
