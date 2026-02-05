@@ -33,10 +33,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application
-COPY --from=builder /app/public ./public
+# Copy built application (public folder is optional)
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# Copy public folder if it exists (Next.js puts assets in .next/static anyway)
+RUN mkdir -p ./public
 
 # Create directory for cloned repos with proper permissions
 RUN mkdir -p /data/repos && chown -R nextjs:nodejs /data
