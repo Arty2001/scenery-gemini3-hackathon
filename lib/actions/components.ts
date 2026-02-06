@@ -541,10 +541,7 @@ export async function regenerateComponentPreview(componentId: string): Promise<{
 export async function getComponent(componentId: string): Promise<ComponentWithId | null> {
   const supabase = await createClient();
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return null;
-
-  // Get the component - RLS will ensure user owns the project
+  // RLS handles access control - demo project components are readable by anyone
   const { data: component, error } = await supabase
     .from('discovered_components')
     .select('*')
@@ -585,9 +582,8 @@ export async function getComponentPreviews(
   if (componentIds.length === 0) return {};
 
   const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return {};
 
+  // RLS handles access control - demo project components are readable by anyone
   const { data: components, error } = await supabase
     .from('discovered_components')
     .select('id, preview_html')
@@ -619,15 +615,7 @@ export async function getComponentCodes(
 
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    console.error('getComponentCodes: Not authenticated');
-    return {};
-  }
-
+  // RLS handles access control - demo project components are readable by anyone
   // Get components with their repository's local_path
   const { data: components, error } = await supabase
     .from('discovered_components')
@@ -676,15 +664,7 @@ export async function getComponentCodes(
 export async function getComponentById(componentId: string) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    throw new Error('Unauthorized');
-  }
-
+  // RLS handles access control - demo project components are readable by anyone
   const { data, error } = await supabase
     .from('discovered_components')
     .select(`
@@ -692,12 +672,7 @@ export async function getComponentById(componentId: string) {
       name:component_name,
       file_path,
       props_schema,
-      demo_props,
-      repository_connections!inner (
-        projects!inner (
-          user_id
-        )
-      )
+      demo_props
     `)
     .eq('id', componentId)
     .single();
@@ -705,12 +680,6 @@ export async function getComponentById(componentId: string) {
   if (error) {
     console.error('Failed to fetch component:', error);
     return null;
-  }
-
-  // Verify ownership through the join
-  const repoConn = data?.repository_connections as { projects: { user_id: string } } | null;
-  if (repoConn?.projects?.user_id !== user.id) {
-    throw new Error('Unauthorized');
   }
 
   // props_schema is stored as PropInfo[] — convert to JSON Schema for PropsForm

@@ -42,8 +42,9 @@ export async function getOrCreateComposition(
   const supabase = await createClient();
   const isDemo = isDemoProject(projectId);
 
-  // Demo projects allow anonymous read of existing compositions
+  // Demo projects allow anonymous read/write of compositions
   if (isDemo) {
+    // Try to get existing composition
     const { data: existing } = await supabase
       .from('compositions')
       .select('*')
@@ -62,16 +63,46 @@ export async function getOrCreateComposition(
         height: existing.height,
       };
     }
-    // No composition exists for demo - return default for viewing
+
+    // No composition exists - create one (RLS allows INSERT for demo projects)
+    const { data: created, error } = await supabase
+      .from('compositions')
+      .insert({
+        project_id: projectId,
+        name: 'Demo Composition',
+        tracks: [] as unknown as Json,
+        duration_in_frames: 900,
+        fps: 30,
+        width: 1920,
+        height: 1080,
+      })
+      .select()
+      .single();
+
+    if (error || !created) {
+      console.error('Failed to create demo composition:', error);
+      // Fallback to in-memory composition if insert fails
+      return {
+        id: `demo-comp-${projectId}`,
+        projectId,
+        name: 'Demo Composition',
+        tracks: [],
+        durationInFrames: 900,
+        fps: 30,
+        width: 1920,
+        height: 1080,
+      };
+    }
+
     return {
-      id: `demo-comp-${projectId}`,
-      projectId,
-      name: 'Demo Composition',
-      tracks: [],
-      durationInFrames: 900,
-      fps: 30,
-      width: 1920,
-      height: 1080,
+      id: created.id,
+      projectId: created.project_id,
+      name: created.name,
+      tracks: (created.tracks as unknown as Track[]) ?? [],
+      durationInFrames: created.duration_in_frames,
+      fps: created.fps,
+      width: created.width,
+      height: created.height,
     };
   }
 
@@ -148,20 +179,16 @@ export async function saveComposition(
     height?: number;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  // Demo compositions are in-memory only, no-op save
-  if (compositionId.startsWith('demo-')) {
+  // In-memory demo compositions (fallback) cannot be saved
+  if (compositionId.startsWith('demo-comp-')) {
     return { success: true };
   }
 
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { success: false, error: 'Not authenticated' };
-  }
+  // RLS handles permission:
+  // - Authenticated users can update their own project compositions
+  // - Anyone can update demo project compositions
 
   // Build update object with only provided fields
   const updateData: Record<string, unknown> = {};

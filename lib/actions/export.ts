@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getLambdaConfig, QUALITY_PRESETS } from '@/lib/remotion/lambda-config';
 import type { QualityPreset } from '@/lib/remotion/lambda-config';
 import { getComponentPreviews } from '@/lib/actions/components';
+import { isDemoProject } from '@/lib/demo-projects';
 
 // =============================================
 // Types
@@ -42,11 +43,12 @@ interface RenderJobData {
 /**
  * Start a video export via Remotion Lambda.
  *
- * 1. Auth check
- * 2. Verify user owns the composition
- * 3. Call renderMediaOnLambda
- * 4. Insert render_jobs row
- * 5. Return jobId and renderId
+ * 1. Fetch composition (RLS allows demo project access)
+ * 2. Auth check (skip for demo projects)
+ * 3. Verify ownership (skip for demo projects)
+ * 4. Call renderMediaOnLambda
+ * 5. Insert render_jobs row
+ * 6. Return jobId and renderId
  */
 export async function startExport(
   compositionId: string,
@@ -54,19 +56,10 @@ export async function startExport(
 ): Promise<StartExportResult> {
   const supabase = await createClient();
 
-  // 1. Auth check
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return { error: 'Not authenticated' };
-  }
-
-  // 2. Fetch composition and verify ownership (compositions -> projects -> user_id)
+  // 1. Fetch composition first to check if it's a demo project
   const { data: composition, error: compError } = await supabase
     .from('compositions')
-    .select('id, project_id, tracks, duration_in_frames, fps, width, height, projects!inner(user_id)')
+    .select('id, project_id, tracks, duration_in_frames, fps, width, height, projects!inner(user_id, is_demo)')
     .eq('id', compositionId)
     .single();
 
@@ -74,10 +67,22 @@ export async function startExport(
     return { error: 'Composition not found' };
   }
 
-  // Verify ownership through project
-  const project = composition.projects as unknown as { user_id: string };
-  if (project.user_id !== user.id) {
-    return { error: 'Not authorized' };
+  const project = composition.projects as unknown as { user_id: string; is_demo: boolean };
+  const isDemo = project.is_demo;
+
+  // 2. Auth check - required for non-demo projects
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // For non-demo projects, require authentication and ownership
+  if (!isDemo) {
+    if (!user) {
+      return { error: 'Not authenticated' };
+    }
+    if (project.user_id !== user.id) {
+      return { error: 'Not authorized' };
+    }
   }
 
   // 3. Fetch preview HTML for components
@@ -128,12 +133,12 @@ export async function startExport(
     return { error: err instanceof Error ? err.message : 'Lambda render failed' };
   }
 
-  // 5. Insert render_jobs row
+  // 5. Insert render_jobs row (user_id is null for demo exports)
   const { data: job, error: insertError } = await supabase
     .from('render_jobs')
     .insert({
       composition_id: compositionId,
-      user_id: user.id,
+      user_id: user?.id ?? null,
       render_id: renderId,
       bucket_name: bucketName,
       quality,
@@ -153,24 +158,21 @@ export async function startExport(
 }
 
 /**
- * Fetch a render job by id, verifying the current user owns it.
+ * Fetch a render job by id.
+ * RLS handles access control:
+ * - Users can view their own render jobs
+ * - Anyone can view demo project render jobs
  */
 export async function getRenderJob(
   jobId: string
 ): Promise<RenderJobData | null> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return null;
-
+  // RLS policies handle access control - just fetch by ID
   const { data: job } = await supabase
     .from('render_jobs')
     .select('id, composition_id, status, progress, quality, output_url, error, created_at')
     .eq('id', jobId)
-    .eq('user_id', user.id)
     .single();
 
   if (!job) return null;

@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       compositions: {
@@ -82,66 +57,6 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: true
             referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      render_jobs: {
-        Row: {
-          id: string
-          user_id: string
-          composition_id: string
-          render_id: string | null
-          bucket_name: string | null
-          quality: string
-          status: string
-          progress: number
-          output_url: string | null
-          error: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          composition_id: string
-          render_id?: string | null
-          bucket_name?: string | null
-          quality?: string
-          status?: string
-          progress?: number
-          output_url?: string | null
-          error?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          composition_id?: string
-          render_id?: string | null
-          bucket_name?: string | null
-          quality?: string
-          status?: string
-          progress?: number
-          output_url?: string | null
-          error?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "render_jobs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "render_jobs_composition_id_fkey"
-            columns: ["composition_id"]
-            isOneToOne: false
-            referencedRelation: "compositions"
             referencedColumns: ["id"]
           },
         ]
@@ -303,6 +218,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          is_demo: boolean | null
           name: string
           repo_url: string | null
           thumbnail_url: string | null
@@ -313,6 +229,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_demo?: boolean | null
           name: string
           repo_url?: string | null
           thumbnail_url?: string | null
@@ -323,6 +240,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_demo?: boolean | null
           name?: string
           repo_url?: string | null
           thumbnail_url?: string | null
@@ -335,6 +253,59 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      render_jobs: {
+        Row: {
+          bucket_name: string | null
+          composition_id: string
+          created_at: string
+          error: string | null
+          id: string
+          output_url: string | null
+          progress: number
+          quality: string
+          render_id: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          bucket_name?: string | null
+          composition_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          output_url?: string | null
+          progress?: number
+          quality?: string
+          render_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          bucket_name?: string | null
+          composition_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          output_url?: string | null
+          progress?: number
+          quality?: string
+          render_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_jobs_composition_id_fkey"
+            columns: ["composition_id"]
+            isOneToOne: false
+            referencedRelation: "compositions"
             referencedColumns: ["id"]
           },
         ]
@@ -526,9 +497,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
