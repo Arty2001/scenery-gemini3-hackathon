@@ -191,8 +191,17 @@ export function RepoStatus({ connection, projectId }: RepoStatusProps) {
 
   const handleDisconnect = async () => {
     setIsDisconnecting(true)
+    setError(null)
     try {
-      await disconnectRepository(projectId)
+      const result = await disconnectRepository(projectId)
+      if (!result.success) {
+        setError(result.error || 'Failed to disconnect repository')
+      } else {
+        // Refresh the page to reflect the disconnected state
+        router.refresh()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to disconnect repository')
     } finally {
       setIsDisconnecting(false)
     }

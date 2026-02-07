@@ -16,6 +16,16 @@ const IGNORE_PATTERNS = [
   '**/build/**',
   '**/.next/**',
   '**/coverage/**',
+  // API routes (not UI components)
+  '**/app/**/route.ts',
+  '**/app/**/route.js',
+  '**/api/**',
+  // Config files
+  '**/next.config.*',
+  '**/tailwind.config.*',
+  '**/postcss.config.*',
+  '**/middleware.ts',
+  '**/middleware.js',
 ];
 
 export async function getComponentFiles(repoPath: string): Promise<string[]> {
@@ -39,6 +49,10 @@ export async function scanRepository(
 ): Promise<{ components: ComponentInfo[]; errors: Array<{ file: string; error: string }> }> {
   const files = await getComponentFiles(repoPath);
 
+  // Debug: log all files found
+  console.log(`[scanner] Found ${files.length} TSX/JSX files:`);
+  files.forEach(f => console.log(`  - ${f.replace(repoPath, '').replace(/^[\/\\]/, '')}`));
+
   const progress: AnalysisProgress = {
     total: files.length,
     processed: 0,
@@ -54,9 +68,16 @@ export async function scanRepository(
 
     try {
       const components = parseComponents(filePath, repoPath);
+      // Debug: log components found per file
+      if (components.length > 0) {
+        console.log(`[scanner] ${progress.currentFile}: ${components.length} component(s) - ${components.map(c => c.componentName).join(', ')}`);
+      } else {
+        console.log(`[scanner] ${progress.currentFile}: no components found (no typed exports?)`);
+      }
       allComponents.push(...components);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.log(`[scanner] ${progress.currentFile}: ERROR - ${errorMessage}`);
       progress.errors.push({ file: progress.currentFile, error: errorMessage });
     }
 

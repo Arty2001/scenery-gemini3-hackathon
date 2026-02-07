@@ -232,9 +232,13 @@ export function ComponentItemRenderer({
     return (
       <AbsoluteFill>
         <div
-          ref={containerRef}
-          data-component-preview={item.componentId}
           style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
             opacity: animStyle.opacity * kfOpacity,
             transform: [
               animStyle.transform,
@@ -244,12 +248,19 @@ export function ComponentItemRenderer({
             ].filter(v => v && v !== 'none').join(' ') || 'none',
             filter: filterStyle !== 'none' ? filterStyle : undefined,
             boxShadow: shadowStyle,
-            width: '100%',
-            height: '100%',
-            overflow: 'hidden',
           }}
-          dangerouslySetInnerHTML={{ __html: previewHtml }}
-        />
+        >
+          <div
+            ref={containerRef}
+            data-component-preview={item.componentId}
+            style={{
+              width: '100%',
+              maxWidth: '100%',
+              overflow: 'hidden',
+            }}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
+        </div>
       </AbsoluteFill>
     );
   }
@@ -324,12 +335,22 @@ export function ComponentItemRenderer({
               flexDirection: 'column',
               alignItems: h === 'left' ? 'flex-start' : h === 'right' ? 'flex-end' : 'center',
               justifyContent: v === 'top' ? 'flex-start' : v === 'bottom' ? 'flex-end' : 'center',
+              padding: isPhoneRatio ? '16px' : '24px',
             }}
           >
             <div
               ref={containerRef}
               data-component-preview={item.componentId}
-              style={{ width: '100%', overflow: 'hidden' }}
+              style={{
+                width: '100%',
+                maxWidth: '100%',
+                height: 'auto',
+                overflow: 'hidden',
+                // Make content scale down if larger than container
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'stretch',
+              }}
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           </div>

@@ -1,25 +1,34 @@
-app = "scenery-gemini3"
-primary_region = "iad"
+# fly.toml app configuration file generated for scenery-gemini3 on 2026-02-05T14:38:00-05:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+# Secrets (set via `fly secrets set`):
+#   - PLAYWRIGHT_WORKER_URL: URL of the Playwright worker (see playwright-worker/)
+#   - PLAYWRIGHT_WORKER_SECRET: Shared secret for worker authentication
+#
+
+app = 'scenery-gemini3'
+primary_region = 'iad'
 
 [build]
 
 [env]
-  NODE_ENV = "production"
-  REPOS_BASE_DIR = "/data/repos"
+  NODE_ENV = 'production'
+  REPOS_BASE_DIR = '/data/repos'
+
+[[mounts]]
+  source = 'repos_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 3000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  memory = "2gb"
-  cpu_kind = "shared"
+  memory = '2gb'
   cpus = 2
-
-[mounts]
-  source = "repos_data"
-  destination = "/data"
+  memory_mb = 2048

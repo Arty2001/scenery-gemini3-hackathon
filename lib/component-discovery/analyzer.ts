@@ -11,6 +11,8 @@ import {
 } from './schemas';
 import type { ComponentInfo, PropInfo, RepoContext } from './types';
 import { extractInteractiveElements } from './extract-interactive-elements';
+import { generateHybridPreviewHtml } from './ssr-preview';
+import { extractStorybookArgs } from './storybook-extractor';
 
 function formatPropsForPrompt(props: PropInfo[]): string {
   if (props.length === 0) return 'No props defined';
@@ -27,10 +29,14 @@ export async function categorizeComponent(
   component: ComponentInfo,
   repoContext: RepoContext
 ): Promise<CategoryResult | null> {
-  try {
-    const ai = getAIClient();
+  const maxRetries = 2;
+  let lastError: unknown;
 
-    const prompt = `Categorize this React UI component.
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const ai = getAIClient();
+
+      const prompt = `Categorize this React UI component.
 
 Repository: ${repoContext.owner}/${repoContext.name}
 Component name: ${component.componentName}
@@ -43,38 +49,68 @@ Available categories: ${COMPONENT_CATEGORIES.join(', ')}
 Analyze the component name, props, and context to determine its UI category.
 Choose the most specific category that applies.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: toJsonSchema(categorySchema) as object,
-      },
-    });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: toJsonSchema(categorySchema) as object,
+        },
+      });
 
-    const text = response.text;
-    if (!text) return null;
+      const text = response.text;
+      if (!text) return null;
 
-    return categorySchema.parse(JSON.parse(text));
-  } catch (error) {
-    console.error('Categorization failed:', error);
-    return null;
+      return categorySchema.parse(JSON.parse(text));
+    } catch (error) {
+      lastError = error;
+      const isNetworkError = error instanceof Error &&
+        (error.message.includes('fetch failed') || error.message.includes('ECONNRESET'));
+
+      if (isNetworkError && attempt < maxRetries) {
+        console.log(`[categorize] ${component.componentName}: Network error, retrying (${attempt + 1}/${maxRetries})...`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      break;
+    }
   }
+
+  console.error('Categorization failed:', lastError);
+  return null;
 }
 
 export async function generateDemoProps(
   component: ComponentInfo,
-  repoContext: RepoContext
+  repoContext: RepoContext,
+  sourceCodeMap?: Record<string, string>
 ): Promise<DemoPropsResult | null> {
-  try {
-    const ai = getAIClient();
+  // Skip if no props to generate
+  if (component.props.length === 0) {
+    return { props: {}, confidence: 'high' };
+  }
 
-    // Skip if no props to generate
-    if (component.props.length === 0) {
-      return { props: {}, confidence: 'high' };
+  // Try extracting args from Storybook stories first (highest quality)
+  if (sourceCodeMap) {
+    const storybookResult = extractStorybookArgs(component.filePath, sourceCodeMap);
+    if (storybookResult.hasStorybook && storybookResult.defaultArgs) {
+      console.log(`[demo-props] ${component.componentName}: using Storybook args`);
+      return {
+        props: storybookResult.defaultArgs,
+        confidence: 'high', // Storybook args are author-defined, highest confidence
+      };
     }
+  }
 
-    const prompt = `Generate realistic demo props for a React component.
+  // Fallback to AI-generated demo props with retry
+  const maxRetries = 2;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const ai = getAIClient();
+
+      const prompt = `Generate realistic demo props for a React component.
 
 Repository: ${repoContext.owner}/${repoContext.name}
 Component: ${component.componentName}
@@ -90,33 +126,97 @@ Requirements:
 - For numbers: use sensible defaults
 - For functions: use null (will be mocked in sandbox)
 - For complex objects: provide minimal valid structure
-- Only include required props and commonly-used optional ones`;
+- Only include required props and commonly-used optional ones
+- IMPORTANT: For conditionally-rendered components (Modal, Dialog, Drawer, Popover, Tooltip, Sheet, Dropdown, Menu, Alert, Toast), always set open/isOpen/visible/show to true so content renders`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: toJsonSchema(demoPropsSchema) as object,
-      },
-    });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: toJsonSchema(demoPropsSchema) as object,
+        },
+      });
 
-    const text = response.text;
-    if (!text) return null;
+      const text = response.text;
+      if (!text) return null;
 
-    return demoPropsSchema.parse(JSON.parse(text));
-  } catch (error) {
-    console.error('Demo props generation failed:', error);
-    return null;
+      const result = demoPropsSchema.parse(JSON.parse(text));
+
+      // Post-process: ensure conditional components have visibility props set
+      const conditionalPatterns = ['modal', 'dialog', 'drawer', 'popover', 'tooltip', 'sheet', 'dropdown', 'menu', 'alert', 'toast', 'overlay', 'portal'];
+      const isConditional = conditionalPatterns.some(p => component.componentName.toLowerCase().includes(p));
+
+      if (isConditional) {
+        const visibilityProps = ['open', 'isOpen', 'visible', 'show', 'isVisible', 'isShown'];
+        const hasProp = component.props.find(p => visibilityProps.includes(p.name));
+        if (hasProp && result.props[hasProp.name] === undefined) {
+          result.props[hasProp.name] = true;
+          console.log(`[demo-props] ${component.componentName}: auto-set ${hasProp.name}=true for visibility`);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error;
+      const isNetworkError = error instanceof Error &&
+        (error.message.includes('fetch failed') || error.message.includes('ECONNRESET'));
+
+      if (isNetworkError && attempt < maxRetries) {
+        console.log(`[demo-props] ${component.componentName}: Network error, retrying (${attempt + 1}/${maxRetries})...`);
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // Exponential backoff
+        continue;
+      }
+      break;
+    }
   }
+
+  console.error('Demo props generation failed:', lastError);
+  return null;
 }
 
 /**
  * Generate a self-contained HTML/CSS visual preview of a component.
- * Called one-at-a-time (not batched) for maximum quality.
- * Receives the actual source code and related component source code for context.
+ *
+ * Pipeline (in order of accuracy):
+ * 1. Playwright rendering (highest accuracy - real browser with hooks, context, effects)
+ * 2. SSR rendering (fast - renderToStaticMarkup, limited to simple components)
+ * 3. AI generation (fallback - Gemini generates HTML from source code)
+ *
+ * All paths use AI for Tailwind → inline style conversion.
  */
 export async function generatePreviewHtml(
+  component: ComponentInfo,
+  repoContext: RepoContext,
+  sourceCode?: string,
+  relatedSourceCode?: Record<string, string>,
+  repoPath?: string
+): Promise<PreviewHtmlResult | null> {
+  // Try hybrid approach first (Playwright → SSR → null)
+  if (sourceCode) {
+    const hybridResult = await generateHybridPreviewHtml(
+      component,
+      repoContext,
+      sourceCode,
+      relatedSourceCode,
+      repoPath
+    );
+
+    if (hybridResult) {
+      console.log(`[preview] ${component.componentName}: ${hybridResult.method} succeeded`);
+      return { html: hybridResult.html };
+    }
+  }
+
+  // Fallback to AI-only generation
+  console.log(`[preview] ${component.componentName}: falling back to AI-only generation`);
+  return generateAIOnlyPreviewHtml(component, repoContext, sourceCode, relatedSourceCode);
+}
+
+/**
+ * AI-only preview generation (fallback when Playwright and SSR fail)
+ */
+async function generateAIOnlyPreviewHtml(
   component: ComponentInfo,
   repoContext: RepoContext,
   sourceCode?: string,
@@ -136,7 +236,7 @@ export async function generatePreviewHtml(
 
     const prompt = `You are converting a React component from a REAL CODEBASE into static HTML. Your job is to create an EXACT visual replica — not a generic interpretation.
 
-## ⚠️ CRITICAL: EXACT REPRODUCTION REQUIRED
+## CRITICAL: EXACT REPRODUCTION REQUIRED
 
 **You MUST reproduce the component EXACTLY as it appears in the source code below.**
 
@@ -165,7 +265,7 @@ ${relatedContext}
 3. CONVERT each className to inline CSS (use reference below)
 4. OUTPUT the exact same structure as HTML
 
-## Tailwind → CSS Reference
+## Tailwind to CSS Reference
 
 **Spacing:** p-1:4px p-2:8px p-3:12px p-4:16px p-5:20px p-6:24px p-8:32px m-1:4px m-2:8px m-4:16px gap-1:4px gap-2:8px gap-4:16px gap-6:24px
 **Text:** text-xs:12px text-sm:14px text-base:16px text-lg:18px text-xl:20px text-2xl:24px text-3xl:30px text-4xl:36px
@@ -189,7 +289,7 @@ accent:#f5f5f5 accent-foreground:#171717 destructive:#ef4444 border:#e5e5e5
 5. Icons: use inline SVG (e.g., <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">...</svg>)
 6. Arrays/maps: show 2-3 items with realistic data matching the component's purpose
 
-## ⚠️ INTERACTIVE ELEMENTS — USE REAL HTML TAGS
+## INTERACTIVE ELEMENTS — USE REAL HTML TAGS
 
 For cursor targeting in video tutorials, you MUST use semantic HTML:
 

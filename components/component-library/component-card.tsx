@@ -32,28 +32,76 @@ interface ComponentCardProps {
 
 function PreviewIframe({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
 
   useEffect(() => {
     const iframe = iframeRef.current;
-    if (!iframe) return;
+    const container = containerRef.current;
+    if (!iframe || !container) return;
+
     const doc = iframe.contentDocument;
     if (!doc) return;
+
+    // Write the HTML content
     doc.open();
     doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-      html, body { margin: 0; padding: 12px; overflow: hidden; background: white;
-        display: flex; align-items: center; justify-content: center; min-height: 100%; }
+      html, body { margin: 0; padding: 24px; overflow: hidden; background: white; min-height: 100vh; }
+      body { display: flex; align-items: flex-start; justify-content: center; }
       * { box-sizing: border-box; }
     </style></head><body>${html}</body></html>`);
     doc.close();
+
+    // Calculate scale after content loads
+    const calculateScale = () => {
+      const containerWidth = container.offsetWidth;
+      const containerHeight = container.offsetHeight;
+
+      // Get the actual content dimensions from the iframe
+      const body = doc.body;
+      if (!body) return;
+
+      // Get the bounding rect of all content
+      const contentWidth = body.scrollWidth;
+      const contentHeight = body.scrollHeight;
+
+      // Calculate scale to fit content within container with some padding
+      const padding = 0.9; // Leave 10% margin
+      const scaleX = (containerWidth * padding) / contentWidth;
+      const scaleY = (containerHeight * padding) / contentHeight;
+
+      // Use the smaller scale to ensure entire component fits
+      const newScale = Math.min(scaleX, scaleY, 1); // Max scale of 1 (don't upscale)
+      setScale(newScale);
+    };
+
+    // Wait for content to render then calculate scale
+    const timeoutId = setTimeout(calculateScale, 100);
+
+    // Also recalculate on resize
+    const resizeObserver = new ResizeObserver(calculateScale);
+    resizeObserver.observe(container);
+
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+    };
   }, [html]);
 
   return (
-    <iframe
-      ref={iframeRef}
-      className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-      sandbox="allow-same-origin"
-      title="Component preview"
-    />
+    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
+      <iframe
+        ref={iframeRef}
+        className="border-0 pointer-events-none origin-top-left"
+        sandbox="allow-same-origin"
+        title="Component preview"
+        style={{
+          width: `${100 / scale}%`,
+          height: `${100 / scale}%`,
+          transform: `scale(${scale})`,
+        }}
+      />
+    </div>
   );
 }
 

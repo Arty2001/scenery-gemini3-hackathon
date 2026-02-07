@@ -313,6 +313,11 @@ export async function syncRepository(
 export async function disconnectRepository(
   projectId: string
 ): Promise<ActionResult> {
+  // Demo projects cannot be disconnected
+  if (projectId.startsWith('demo-')) {
+    return { success: false, error: 'Demo projects cannot be modified' }
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -321,11 +326,24 @@ export async function disconnectRepository(
   }
 
   // Get connection to find local path
-  const { data: connection } = await supabase
+  const { data: connection, error: selectError } = await supabase
     .from('repository_connections')
     .select('local_path')
     .eq('project_id', projectId)
     .single()
+
+  // If no connection exists, treat as already disconnected (success)
+  // This handles stale UI state where user clicks disconnect but connection is already gone
+  if (selectError?.code === 'PGRST116') {
+    console.log('[disconnectRepository] No connection found, already disconnected')
+    revalidatePath(`/protected/projects/${projectId}`)
+    return { success: true, data: undefined }
+  }
+
+  if (selectError) {
+    console.error('[disconnectRepository] Failed to get connection:', selectError)
+    return { success: false, error: 'Repository connection not found' }
+  }
 
   // Delete local files if they exist
   if (connection?.local_path) {
@@ -338,7 +356,8 @@ export async function disconnectRepository(
     .eq('project_id', projectId)
 
   if (error) {
-    return { success: false, error: 'Failed to disconnect repository' }
+    console.error('[disconnectRepository] Failed to delete:', error)
+    return { success: false, error: `Failed to disconnect: ${error.message}` }
   }
 
   revalidatePath(`/protected/projects/${projectId}`)

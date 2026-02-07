@@ -232,7 +232,8 @@ export async function discoverComponents(
         }
 
         try {
-          const previewResult = await generatePreviewHtml(comp, repoContext, sourceCode, relatedSourceCode);
+          // Pass full sourceCodeMap and localPath for Playwright rendering
+          const previewResult = await generatePreviewHtml(comp, repoContext, sourceCode, sourceCodeMap, localPath);
           if (previewResult?.html) {
             // Extract interactive elements from the preview HTML
             const interactiveElements = extractInteractiveElements(previewResult.html);

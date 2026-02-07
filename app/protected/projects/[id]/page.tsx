@@ -55,6 +55,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     connection = repoResult.success ? repoResult.data : null
   }
 
+
   return (
     <div className="space-y-6">
       {/* Header */}
