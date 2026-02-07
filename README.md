@@ -1,23 +1,19 @@
-<p align="center">
-  <img src="https://scenery-gemini3.fly.dev/opengraph-image.png" alt="Scenery" width="600" />
-</p>
-
-<h1 align="center">Scenery</h1>
+<h1 align="center">🎬 Scenery</h1>
 
 <p align="center">
   <strong>AI-Powered Video Generation for React Component Libraries</strong>
 </p>
 
 <p align="center">
-  Transform your React components into professional product videos with a single prompt.
-  <br />
-  <strong>7 Gemini 3 Integrations</strong> • <strong>Multi-Agent Architecture</strong> • <strong>Production-Ready</strong>
+  <em>Transform your React components into professional product videos with AI.</em>
+  <br /><br />
+  <strong>7 Gemini 3 Integrations</strong> • <strong>Multi-Agent Architecture</strong> • <strong>Iterative AI Refinement</strong> • <strong>Auto-Updating Videos</strong>
 </p>
 
 <p align="center">
-  <a href="https://scenery-gemini3.fly.dev"><strong>Live Demo</strong></a> •
-  <a href="https://github.com/Arty2001/scenery-gemini3-hackathon"><strong>Source Code</strong></a> •
-  <a href="#demo-video"><strong>Demo Video</strong></a>
+  <a href="https://scenery-gemini3.fly.dev"><strong>🚀 Live Demo</strong></a> •
+  <a href="https://github.com/Arty2001/scenery-gemini3-hackathon"><strong>📦 Source Code</strong></a> •
+  <a href="#demo-video"><strong>🎥 Demo Video</strong></a>
 </p>
 
 ---
@@ -25,6 +21,48 @@
 ## Demo Video
 
 > **[Watch the 3-minute demo on YouTube](YOUR_YOUTUBE_LINK_HERE)**
+
+---
+
+## Why Scenery is Different
+
+### 🔄 Videos That Never Go Stale
+
+**The Problem:** Product videos become outdated the moment you ship a new version. Traditional video editing means re-recording, re-editing, and re-exporting every time your components change.
+
+**The Solution:** Scenery videos are **code-connected**. When your repo syncs, videos automatically update to reflect the latest component designs. Your documentation videos stay current without any manual work.
+
+```
+Component Updated in Repo
+         │
+         ▼
+   Automatic Re-sync ──▶ Preview HTML Regenerated ──▶ Video Reflects Latest Design
+         │
+         └──── Zero manual video editing required
+```
+
+### 💬 Iterative AI Chat Refinement
+
+**The Problem:** Most AI tools give you one shot—you get output, and if it's not quite right, you start over. The "last 10%" of refinement is always manual.
+
+**The Solution:** Scenery's video editor includes an **AI chat interface** for iterative refinement. Don't like the timing? Ask to slow it down. Want more emphasis on a feature? Tell the AI. The multi-agent system refines the video based on your feedback—repeatedly—until it's exactly what you want.
+
+```
+User: "Make the transition between login and dashboard slower"
+         │
+         ▼
+   Refinement Agent ──▶ Adjusts timing ──▶ Preview updated in real-time
+         │
+         ▼
+User: "Add emphasis on the loading state"
+         │
+         ▼
+   Scene Planner ──▶ Adds highlight animation ──▶ Preview updated
+         │
+         └──── Iterate until perfect
+```
+
+**This solves the #1 frustration with AI tools:** the inability to make small adjustments without starting from scratch.
 
 ---
 
@@ -509,6 +547,8 @@ No existing tool combines:
 1. **Automatic component discovery** from any GitHub repo
 2. **AI-powered video generation** with multi-agent orchestration
 3. **Real browser rendering** for pixel-perfect accuracy
+4. **Auto-updating videos** that sync with your codebase
+5. **Iterative AI refinement** through conversational chat
 
 ### Research-Inspired Architecture
 
@@ -594,9 +634,11 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 | Task | Before Scenery | With Scenery |
 |------|---------------|--------------|
 | Create product video | 4-8 hours | 2-5 minutes |
-| Update video for new version | 2-4 hours | 30 seconds (regenerate) |
-| Add voiceover narration | 1-2 hours + recording | Automatic |
+| Update video for new version | 2-4 hours | **Automatic** (code-connected) |
+| Refine video timing/pacing | Start over or manual edit | Chat with AI, iterate instantly |
+| Add voiceover narration | 1-2 hours + recording | Automatic TTS |
 | Create cursor interactions | Manual frame-by-frame | AI-generated |
+| Keep docs videos current | Manual process, often neglected | **Always in sync** with repo |
 
 ---
 
@@ -661,6 +703,13 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 │  │   └──────────────┘    └──────────────┘    └──────────────┘               │   │
 │  │                              │                    │                       │   │
 │  │                              │    ◀───────────────┘ (if score < 90)      │   │
+│  │                              │                    ▲                       │   │
+│  │                              │                    │                       │   │
+│  │                              │         ┌──────────────────────┐           │   │
+│  │                              │         │  💬 AI CHAT REFINE   │           │   │
+│  │                              │         │  User: "Slow down    │           │   │
+│  │                              │         │  the transitions"    │──────────┘   │
+│  │                              │         └──────────────────────┘               │
 │  │                              ▼                                            │   │
 │  │                    ┌──────────────┐                                       │   │
 │  │                    │  TTS ENGINE  │                                       │   │
@@ -674,6 +723,15 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 │  │                                                                           │   │
 │  │   Remotion Engine ──▶ Timeline Editor ──▶ Lambda Export (MP4/GIF)        │   │
 │  │                                                                           │   │
+│  └───────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐   │
+│  │                         🔄 AUTO-SYNC LOOP                                 │   │
+│  │                                                                           │   │
+│  │   Repo Updated ──▶ Component Re-discovered ──▶ Preview Regenerated       │   │
+│  │                                         │                                 │   │
+│  │                                         └──▶ Videos Auto-Update           │   │
+│  │                                              (No manual editing needed)   │   │
 │  └───────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────┘
@@ -732,11 +790,13 @@ Scenery uses **Gemini 3 Pro across 7 distinct integrations** that form the core 
 
 **Component Discovery:** (1) Structured JSON output for component categorization, (2) context-aware demo props generation using long context, (3) **Server Component transformation**—190+ regex patterns detect async/await, database ORMs (Prisma, Drizzle, Supabase), auth libraries (NextAuth, Clerk), and Node.js APIs, then Gemini transforms to client-safe code with realistic mock data, (4) Tailwind→inline CSS conversion for portable previews, (5) AI fallback preview generation when bundling fails.
 
-**Video Generation:** (6) Multi-agent orchestration with 15+ function-calling tools—Director Agent plans narrative structure, Scene Planner designs animations and cursor interactions, Refinement Agent scores quality 0-100 and iterates. (7) Gemini 2.5 Flash TTS generates professional voiceover narration.
+**Video Generation:** (6) Multi-agent orchestration with 15+ function-calling tools—Director Agent plans narrative structure, Scene Planner designs animations and cursor interactions, Refinement Agent scores quality 0-100 and iterates **based on user chat feedback**. (7) Gemini 2.5 Flash TTS generates professional voiceover narration.
+
+**Key Differentiators:** Videos are **code-connected**—they auto-update when repos sync, eliminating stale documentation. The AI chat interface enables **iterative refinement**, solving the "last 10%" problem where AI output needs small adjustments.
 
 **Gemini 3 Features Used:** Structured output schemas (100% parse reliability), function calling (video composition tools), long context (full source analysis), streaming (real-time chat), TTS (voiceover generation).
 
-The Server Component transformation alone enables Scenery to work with 60%+ of modern Next.js apps that would otherwise crash in browser rendering. This deep integration demonstrates Gemini 3's versatility across the entire stack.
+This deep integration demonstrates Gemini 3's versatility across the entire stack.
 
 ---
 
