@@ -133,44 +133,72 @@ const response = await ai.models.generateContent({
 
 **Why this matters:** Structured output ensures 100% parse success rate. Categories drive intelligent video scene selection—forms get typing animations, buttons get click effects.
 
-### Integration 2: Demo Props Generation (Long Context + Structured Output)
+### Integration 2: Demo Props Generation (3-Tier Quality System)
 
+Scenery uses a **3-tier quality system** for demo props, prioritizing author-defined values:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DEMO PROPS QUALITY TIERS                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  TIER 1: STORYBOOK EXTRACTION (Highest Quality)                        │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │ • Automatically detects .stories.tsx files in the repo           │  │
+│  │ • Parses CSF2 and CSF3 story formats                             │  │
+│  │ • Extracts author-defined `args` from story exports              │  │
+│  │ • Uses exact props the component authors intended                │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                         │ (if no stories found)                         │
+│                         ▼                                               │
+│  TIER 2: AI-GENERATED PROPS (Medium Quality)                           │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │ • Gemini analyzes TypeScript interface                           │  │
+│  │ • Considers repository context (brand, domain)                   │  │
+│  │ • Generates realistic, production-quality content                │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                         │ (if AI fails)                                 │
+│                         ▼                                               │
+│  TIER 3: TYPE-BASED DEFAULTS (Fallback)                                │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │ • String → "Example text"                                        │  │
+│  │ • Number → 42                                                    │  │
+│  │ • Boolean → true                                                 │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Storybook Extraction:**
+```typescript
+// lib/component-discovery/storybook-extractor.ts
+// Automatically finds and parses stories like:
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+    children: 'Click me',
+    disabled: false,
+  },
+};
+// → Extracts { variant: 'primary', children: 'Click me', disabled: false }
+```
+
+**AI Props Generation (when no Storybook):**
 ```typescript
 // lib/component-discovery/analyzer.ts
 const response = await ai.models.generateContent({
   model: 'gemini-3-pro-preview',
   contents: `Generate realistic demo props for ${componentName}.
-
              Repository: ${repoName} (use for brand context)
-             Props Interface: ${propsInterface}
-
-             Requirements:
-             - Props must be valid for the interface
-             - Use realistic, production-quality content
-             - Match the repository's brand/domain`,
+             Props Interface: ${propsInterface}`,
   config: {
     responseMimeType: 'application/json',
-    responseSchema: {
-      type: 'OBJECT',
-      properties: {
-        props: { type: 'OBJECT' },
-        confidence: { type: 'STRING', enum: ['high', 'medium', 'low'] }
-      }
-    }
+    responseSchema: propsSchema
   }
 });
 ```
 
-**Example transformation:**
-```
-Input:  interface HeroProps { title: string; cta: { label: string; href: string } }
-        Repository: "acme-components"
-
-Output: {
-          title: "Welcome to Acme",
-          cta: { label: "Get Started", href: "/signup" }
-        }
-```
+**Why this matters:** Author-defined Storybook props ensure components render exactly as intended, not with AI-guessed values.
 
 ### Integration 3: Server Component Detection & Transformation (Structured Output)
 
@@ -539,6 +567,91 @@ const audioBuffer = response.candidates[0].content.parts[0].inlineData.data;
 
 ---
 
+## Professional Video Editor
+
+Scenery includes a **full-featured video editor**—not a simplified wizard, but a professional timeline-based tool:
+
+### 30+ Animation Presets
+
+```
+ENTRANCE ANIMATIONS          EXIT ANIMATIONS           EMPHASIS EFFECTS
+├─ fade-in                   ├─ fade-out               ├─ pulse
+├─ slide-in-left/right/up/down ├─ zoom-out            ├─ shake
+├─ zoom-in                   ├─ blur-out               ├─ wiggle
+├─ bounce                    └─ slide-out              ├─ heartbeat
+├─ elastic                                             ├─ jello
+├─ spring-pop                MOTION EFFECTS            └─ glow
+├─ blur-in                   ├─ float
+├─ flip-in                   ├─ drift-right            FILTER EFFECTS
+└─ rotate-in                 └─ ken-burns-zoom         ├─ color-pop
+                                                       ├─ flash
+                                                       ├─ hue-shift
+                                                       └─ cinematic-focus
+```
+
+### 6 Cursor Interaction Types
+
+Simulate realistic user interactions with AI-generated cursor movements:
+
+| Action | Description | Use Case |
+|--------|-------------|----------|
+| `click` | Click animation on target element | Buttons, links, toggles |
+| `hover` | Hover state trigger | Dropdowns, tooltips, hover effects |
+| `type` | Character-by-character typing | Form inputs, search bars |
+| `focus` | Focus ring animation | Form fields, accessibility demos |
+| `select` | Dropdown/option selection | Select menus, radio buttons |
+| `check` | Checkbox toggle | Form checkboxes, settings |
+
+### 6 Particle Effect Types
+
+Add visual polish with customizable particle systems:
+
+| Effect | Properties |
+|--------|------------|
+| **Confetti** | Celebration moments, success states |
+| **Sparks** | Highlight interactions, emphasis |
+| **Snow** | Ambient background effects |
+| **Bubbles** | Playful, light themes |
+| **Stars** | Premium, magical feel |
+| **Dust** | Subtle ambient motion |
+
+Each supports: gravity, spread angle, speed, particle count, colors.
+
+### Device Frame Mockups
+
+Present components in context with professional device frames:
+
+```
+┌─────────────────┐  ┌─────────────────────────────┐  ┌───────────────────────┐
+│    📱 Phone     │  │        💻 Laptop            │  │    🖥️ Full Screen     │
+│                 │  │                             │  │                       │
+│   Mobile-first  │  │   Desktop context with      │  │   Edge-to-edge        │
+│   demos with    │  │   browser chrome, perfect   │  │   for hero sections   │
+│   realistic     │  │   for landing pages         │  │   and full-width      │
+│   touch zones   │  │                             │  │   components          │
+└─────────────────┘  └─────────────────────────────┘  └───────────────────────┘
+```
+
+### Timeline Features
+
+| Feature | Description |
+|---------|-------------|
+| **Multi-track editing** | Separate tracks for text, video, audio, components, cursors, shapes, particles |
+| **Zoom control** | 0.1x to 10x zoom with fit-to-view |
+| **Snap-to-points** | Auto-snap to clip edges, playhead, timeline start |
+| **Real-time preview** | Instant playback via Remotion |
+| **Auto-save** | Compositions save automatically with status indicator |
+| **Keyframe animation** | Custom keyframes for position, scale, rotation, opacity, filters |
+
+### Shape & Graphics Elements
+
+- **Rectangles, circles, lines** with gradients and stroke
+- **Dividers and badges** for professional layouts
+- **Custom SVG** with viewBox support
+- **Gradient backgrounds** (linear, radial)
+
+---
+
 ## Innovation & Wow Factor
 
 ### First-of-its-Kind Solution
@@ -588,6 +701,23 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
      ↓
   95% accuracy vs 40-60% with SSR-only
 ```
+
+### Competitive Landscape
+
+| Feature | Scenery | Remotion | Storybook | Arcade | Synthesia |
+|---------|:-------:|:--------:|:---------:|:------:|:---------:|
+| **Auto Component Discovery** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Code-Connected (Auto-Update)** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **AI Chat Refinement** | ✅ | ⚠️ Partial | ❌ | ❌ | ❌ |
+| **Multi-Agent Orchestration** | ✅ 3 agents | ❌ | ❌ | ❌ | ❌ |
+| **Server Component Support** | ✅ 190+ patterns | ❌ | ⚠️ Limited | N/A | N/A |
+| **Live Component Rendering** | ✅ Playwright | Manual | ✅ Docs only | ❌ | ❌ |
+| **TTS Voiceover** | ✅ 5 voices | Manual | ❌ | ❌ | ✅ |
+| **Cursor Interactions** | ✅ AI-generated | Manual | ❌ | Manual | ❌ |
+| **Export to Video** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **React-Specific** | ✅ | ✅ | ✅ | ❌ | ❌ |
+
+**Key insight:** Existing tools make you choose between automated video (Synthesia), component docs (Storybook), or code-based video (Remotion). Scenery combines all three with AI orchestration and auto-updating capability.
 
 ---
 
@@ -746,6 +876,7 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 | **AI** | Gemini 3 Pro, Gemini 2.5 Flash TTS | All 7 AI integrations |
 | **Frontend** | Next.js 15, React 19, TypeScript | Production SPA |
 | **Video** | Remotion, AWS Lambda | Composition + export |
+| **Editor** | Custom timeline, 30+ animations | Professional video editing |
 | **Rendering** | Playwright, esbuild | Real browser previews |
 | **Database** | Supabase (Postgres) | Project + component storage |
 | **Hosting** | Fly.io (2 apps, auto-scale) | Production deployment |
@@ -788,15 +919,20 @@ npm run dev
 
 Scenery uses **Gemini 3 Pro across 7 distinct integrations** that form the core of every feature:
 
-**Component Discovery:** (1) Structured JSON output for component categorization, (2) context-aware demo props generation using long context, (3) **Server Component transformation**—190+ regex patterns detect async/await, database ORMs (Prisma, Drizzle, Supabase), auth libraries (NextAuth, Clerk), and Node.js APIs, then Gemini transforms to client-safe code with realistic mock data, (4) Tailwind→inline CSS conversion for portable previews, (5) AI fallback preview generation when bundling fails.
+**Component Discovery:** (1) Structured JSON for categorization, (2) 3-tier props generation (Storybook extraction → AI-generated → defaults), (3) **Server Component transformation**—190+ patterns detect async/await, Prisma, NextAuth, etc., then Gemini transforms to client-safe code, (4) Tailwind→inline CSS conversion, (5) AI fallback preview with thinking mode.
 
-**Video Generation:** (6) Multi-agent orchestration with 15+ function-calling tools—Director Agent plans narrative structure, Scene Planner designs animations and cursor interactions, Refinement Agent scores quality 0-100 and iterates **based on user chat feedback**. (7) Gemini 2.5 Flash TTS generates professional voiceover narration.
+**Video Generation:** (6) Multi-agent orchestration—Director plans narrative, Scene Planner designs 30+ animation presets and 6 cursor interaction types, Refinement Agent scores 0-100 and iterates via chat. (7) Gemini 2.5 Flash TTS with 5 voice options.
 
-**Key Differentiators:** Videos are **code-connected**—they auto-update when repos sync, eliminating stale documentation. The AI chat interface enables **iterative refinement**, solving the "last 10%" problem where AI output needs small adjustments.
+**Professional Editor:** Timeline-based editing with particle effects (6 types), device frame mockups, shape/SVG elements, keyframe animations, and real-time auto-save.
 
-**Gemini 3 Features Used:** Structured output schemas (100% parse reliability), function calling (video composition tools), long context (full source analysis), streaming (real-time chat), TTS (voiceover generation).
+**Key Differentiators:**
+- **Videos auto-update** when repos sync—no stale documentation
+- **AI chat refinement** solves the "last 10%" problem
+- **Storybook integration** uses author-defined props, not AI guesses
 
-This deep integration demonstrates Gemini 3's versatility across the entire stack.
+**Gemini 3 Features Used:** Structured output (100% parse reliability), function calling (15+ tools), long context, streaming, thinking mode, TTS.
+
+No other tool combines automatic component discovery, AI video generation, and code-connected auto-updating.
 
 ---
 
