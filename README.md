@@ -12,15 +12,8 @@
 
 <p align="center">
   <a href="https://scenery-gemini3.fly.dev"><strong>🚀 Live Demo</strong></a> •
-  <a href="https://github.com/Arty2001/scenery-gemini3-hackathon"><strong>📦 Source Code</strong></a> •
-  <a href="#demo-video"><strong>🎥 Demo Video</strong></a>
+  <a href="https://github.com/Arty2001/scenery-gemini3-hackathon"><strong>📦 Source Code</strong></a>
 </p>
-
----
-
-## Demo Video
-
-> **[Watch the 3-minute demo on YouTube](YOUR_YOUTUBE_LINK_HERE)**
 
 ---
 
@@ -32,13 +25,15 @@
 
 **The Solution:** Scenery videos are **code-connected**. When your repo syncs, videos automatically update to reflect the latest component designs. Your documentation videos stay current without any manual work.
 
-```
-Component Updated in Repo
-         │
-         ▼
-   Automatic Re-sync ──▶ Preview HTML Regenerated ──▶ Video Reflects Latest Design
-         │
-         └──── Zero manual video editing required
+```mermaid
+flowchart LR
+    A[Component Updated in Repo] --> B[Automatic Re-sync]
+    B --> C[Preview HTML Regenerated]
+    C --> D[Video Reflects Latest Design]
+    B --> E[Zero manual video editing required]
+
+    style A fill:#6366f1,color:#fff
+    style D fill:#22c55e,color:#fff
 ```
 
 ### 💬 Iterative AI Chat Refinement
@@ -47,19 +42,22 @@ Component Updated in Repo
 
 **The Solution:** Scenery's video editor includes an **AI chat interface** for iterative refinement. Don't like the timing? Ask to slow it down. Want more emphasis on a feature? Tell the AI. The multi-agent system refines the video based on your feedback—repeatedly—until it's exactly what you want.
 
-```
-User: "Make the transition between login and dashboard slower"
-         │
-         ▼
-   Refinement Agent ──▶ Adjusts timing ──▶ Preview updated in real-time
-         │
-         ▼
-User: "Add emphasis on the loading state"
-         │
-         ▼
-   Scene Planner ──▶ Adds highlight animation ──▶ Preview updated
-         │
-         └──── Iterate until perfect
+```mermaid
+flowchart TD
+    A["💬 User: 'Slow down transitions'"] --> B[Refinement Agent]
+    B --> C[Adjusts timing]
+    C --> D[Preview updated in real-time]
+    D --> E["💬 User: 'Add emphasis on loading'"]
+    E --> F[Scene Planner]
+    F --> G[Adds highlight animation]
+    G --> H[Preview updated]
+    H --> I{Perfect?}
+    I -->|No| A
+    I -->|Yes| J[✅ Final Video]
+
+    style A fill:#3b82f6,color:#fff
+    style E fill:#3b82f6,color:#fff
+    style J fill:#22c55e,color:#fff
 ```
 
 **This solves the #1 frustration with AI tools:** the inability to make small adjustments without starting from scratch.
@@ -72,35 +70,34 @@ Scenery demonstrates **deep Gemini 3 integration** across the entire application
 
 ### 7 Distinct Gemini 3 Integrations
 
-```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                        GEMINI 3 INTEGRATION MAP                                │
-├────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                │
-│  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │                    COMPONENT DISCOVERY LAYER                            │   │
-│  │                                                                         │   │
-│  │   [1] CATEGORIZATION        [2] PROPS GENERATION    [3] SERVER→CLIENT  │   │
-│  │   Structured JSON output    Context-aware props     Transform async    │   │
-│  │   for UI classification     from repo context       to client-safe     │   │
-│  │                                                                         │   │
-│  │   [4] TAILWIND→CSS          [5] AI PREVIEW                             │   │
-│  │   Inline style conversion   Fallback HTML gen                          │   │
-│  │   for portable previews     with thinking mode                         │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                      │                                         │
-│                                      ▼                                         │
-│  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │                    VIDEO GENERATION LAYER                               │   │
-│  │                                                                         │   │
-│  │   [6] MULTI-AGENT SYSTEM (Director → Scene Planner → Refinement)       │   │
-│  │   Function calling with 15+ tools for composition manipulation          │   │
-│  │                                                                         │   │
-│  │   [7] TTS VOICEOVER                                                     │   │
-│  │   Gemini 2.5 Flash with multiple voice options                         │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph discovery["🔍 COMPONENT DISCOVERY LAYER"]
+        direction LR
+        D1["<b>1. Categorization</b><br/>Structured JSON output<br/>for UI classification"]
+        D2["<b>2. Props Generation</b><br/>Context-aware props<br/>from repo context"]
+        D3["<b>3. Server→Client</b><br/>Transform async<br/>to client-safe"]
+        D4["<b>4. Tailwind→CSS</b><br/>Inline style conversion<br/>for portable previews"]
+        D5["<b>5. AI Preview</b><br/>Fallback HTML gen<br/>with thinking mode"]
+    end
+
+    subgraph video["🎬 VIDEO GENERATION LAYER"]
+        direction LR
+        V1["<b>6. Multi-Agent System</b><br/>Director → Scene Planner → Assembly → Refine<br/>Function calling with 15+ tools"]
+        V2["<b>7. TTS Voiceover</b><br/>Gemini 2.5 Flash<br/>5 voice options"]
+    end
+
+    discovery --> video
+
+    style discovery fill:#1e1b4b,color:#fff
+    style video fill:#0f172a,color:#fff
+    style D1 fill:#6366f1,color:#fff
+    style D2 fill:#6366f1,color:#fff
+    style D3 fill:#6366f1,color:#fff
+    style D4 fill:#6366f1,color:#fff
+    style D5 fill:#6366f1,color:#fff
+    style V1 fill:#22d3ee,color:#000
+    style V2 fill:#22d3ee,color:#000
 ```
 
 ### Integration 1: Component Categorization (Structured Output)
@@ -137,36 +134,26 @@ const response = await ai.models.generateContent({
 
 Scenery uses a **3-tier quality system** for demo props, prioritizing author-defined values:
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    DEMO PROPS QUALITY TIERS                             │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  TIER 1: STORYBOOK EXTRACTION (Highest Quality)                        │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ • Automatically detects .stories.tsx files in the repo           │  │
-│  │ • Parses CSF2 and CSF3 story formats                             │  │
-│  │ • Extracts author-defined `args` from story exports              │  │
-│  │ • Uses exact props the component authors intended                │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                         │ (if no stories found)                         │
-│                         ▼                                               │
-│  TIER 2: AI-GENERATED PROPS (Medium Quality)                           │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ • Gemini analyzes TypeScript interface                           │  │
-│  │ • Considers repository context (brand, domain)                   │  │
-│  │ • Generates realistic, production-quality content                │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                         │ (if AI fails)                                 │
-│                         ▼                                               │
-│  TIER 3: TYPE-BASED DEFAULTS (Fallback)                                │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ • String → "Example text"                                        │  │
-│  │ • Number → 42                                                    │  │
-│  │ • Boolean → true                                                 │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[Component Needs Props] --> B{Storybook stories exist?}
+
+    B -->|Yes| T1["🥇 <b>TIER 1: Storybook Extraction</b><br/><i>Highest Quality</i><br/>• Detects .stories.tsx files<br/>• Parses CSF2/CSF3 formats<br/>• Uses author-defined args"]
+
+    B -->|No| C{AI generation succeeds?}
+
+    C -->|Yes| T2["🥈 <b>TIER 2: AI-Generated Props</b><br/><i>Medium Quality</i><br/>• Gemini analyzes TypeScript<br/>• Considers repo context<br/>• Realistic content"]
+
+    C -->|No| T3["🥉 <b>TIER 3: Type-Based Defaults</b><br/><i>Fallback</i><br/>• String → 'Example text'<br/>• Number → 42<br/>• Boolean → true"]
+
+    T1 --> D[Props Ready ✅]
+    T2 --> D
+    T3 --> D
+
+    style T1 fill:#22c55e,color:#fff
+    style T2 fill:#eab308,color:#000
+    style T3 fill:#f97316,color:#fff
+    style D fill:#6366f1,color:#fff
 ```
 
 **Storybook Extraction:**
@@ -206,44 +193,39 @@ const response = await ai.models.generateContent({
 
 **Our Solution:** A 3-stage pipeline that detects and transforms Server Components automatically:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    SERVER COMPONENT TRANSFORMATION PIPELINE                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  STAGE 1: DETECTION (190+ patterns)                                        │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ • Async patterns: async function, await calls                        │  │
-│  │ • Server directives: 'use server'                                    │  │
-│  │ • Next.js imports: next/headers, next/cache, server-only             │  │
-│  │ • Database libs: Prisma, Drizzle, Mongoose, Supabase, Convex         │  │
-│  │ • Node.js: fs, path, crypto, child_process, node:*                   │  │
-│  │ • Auth: NextAuth, Clerk, Lucia, Kinde, Stytch                        │  │
-│  │ • Payments: Stripe, LemonSqueezy, Paddle                             │  │
-│  │ • Email: Resend, SendGrid, Nodemailer                                │  │
-│  │ • CMS: Sanity, Contentful, Contentlayer                              │  │
-│  │ • Next.js 15: Promise-based params/searchParams                      │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                              │
-│                              ▼                                              │
-│  STAGE 2: AI TRANSFORMATION (Gemini)                                       │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ • Remove async/await keywords                                        │  │
-│  │ • Replace database calls with realistic mock data                    │  │
-│  │ • Remove auth guards (redirect, notFound)                            │  │
-│  │ • Transform Promise-based params to plain objects                    │  │
-│  │ • Keep JSX structure, styling, and event handlers                    │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                              │
-│                              ▼                                              │
-│  STAGE 3: POST-TRANSFORM CLEANUP (Safety Net)                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ • Remove any remaining server imports Gemini missed                  │  │
-│  │ • Clean redirect/notFound calls from conditionals                    │  │
-│  │ • Replace server-only env vars with empty strings                    │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph stage1["🔍 STAGE 1: Detection (190+ patterns)"]
+        P1["Async: async function, await"]
+        P2["Server: 'use server'"]
+        P3["Next.js: headers, cache"]
+        P4["Database: Prisma, Drizzle, Supabase"]
+        P5["Auth: NextAuth, Clerk, Lucia"]
+        P6["Node.js: fs, path, crypto"]
+    end
+
+    subgraph stage2["🤖 STAGE 2: AI Transformation (Gemini)"]
+        T1["Remove async/await keywords"]
+        T2["Replace DB calls with mock data"]
+        T3["Remove auth guards"]
+        T4["Transform Promise params"]
+        T5["Keep JSX & styling intact"]
+    end
+
+    subgraph stage3["🧹 STAGE 3: Post-Transform Cleanup"]
+        C1["Remove missed server imports"]
+        C2["Clean redirect/notFound"]
+        C3["Replace server env vars"]
+    end
+
+    stage1 --> stage2
+    stage2 --> stage3
+    stage3 --> D[Client-Safe Component ✅]
+
+    style stage1 fill:#ef4444,color:#fff
+    style stage2 fill:#6366f1,color:#fff
+    style stage3 fill:#22c55e,color:#fff
+    style D fill:#22d3ee,color:#000
 ```
 
 **Detection Implementation (190+ patterns):**
@@ -382,60 +364,54 @@ const response = await ai.models.generateContent({
 
 ### Integration 6: Multi-Agent Video Generation (Function Calling)
 
-The crown jewel—a **3-agent orchestration system** using Gemini's function calling:
+The crown jewel—a **4-agent orchestration system** using Gemini's function calling:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         MULTI-AGENT PIPELINE                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  User: "Create a product video showing our auth flow"                       │
-│                              │                                              │
-│                              ▼                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  DIRECTOR AGENT                                                       │  │
-│  │  Role: High-level narrative planning                                  │  │
-│  │                                                                       │  │
-│  │  Tools:                                                               │  │
-│  │  • create_video_plan(title, tone, targetDuration, scenes[])          │  │
-│  │  • select_components(componentIds[], criteria)                        │  │
-│  │                                                                       │  │
-│  │  Output: Video plan with scene breakdown, tone, pacing               │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                              │
-│                              ▼                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  SCENE PLANNER AGENT                                                  │  │
-│  │  Role: Detailed motion design for each scene                         │  │
-│  │                                                                       │  │
-│  │  Tools:                                                               │  │
-│  │  • design_scene(sceneId, elements[], transitions)                    │  │
-│  │  • add_text(content, position, fontSize, animation, keyframes[])     │  │
-│  │  • add_component(componentId, position, size, enterAnimation)        │  │
-│  │  • add_cursor(targetSelector, action, timing)                        │  │
-│  │  • add_device_frame(type, position, scale)                           │  │
-│  │                                                                       │  │
-│  │  Output: Complete scene specifications with timing                   │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                              │
-│                              ▼                                              │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  REFINEMENT AGENT                                                     │  │
-│  │  Role: Quality scoring and iterative improvement                     │  │
-│  │                                                                       │  │
-│  │  Scoring Criteria:                                                   │  │
-│  │  • Timing and pacing (0-25)                                          │  │
-│  │  • Visual hierarchy (0-25)                                           │  │
-│  │  • Animation smoothness (0-25)                                       │  │
-│  │  • Narrative clarity (0-25)                                          │  │
-│  │                                                                       │  │
-│  │  If score < 90: Generate fixes → Re-run Scene Planner               │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                              │
-│                              ▼                                              │
-│                    Final Video Composition                                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    U["💬 User: 'Create a product video showing our auth flow'"]
+
+    U --> D
+
+    subgraph D["🎬 DIRECTOR AGENT"]
+        D1["High-level narrative planning"]
+        D2["Tools: create_video_plan, select_components"]
+        D3["Output: Scene breakdown, tone, pacing"]
+    end
+
+    D --> S
+
+    subgraph S["🎨 SCENE PLANNER AGENT"]
+        S1["Detailed motion design (parallel)"]
+        S2["Tools: design_scene, add_text, add_component, add_cursor"]
+        S3["Output: Complete scene specs with timing"]
+    end
+
+    S --> A
+
+    subgraph A["🔧 ASSEMBLY AGENT"]
+        A1["Deterministic composition building"]
+        A2["Convert to absolute frames"]
+        A3["Organize tracks by type"]
+    end
+
+    A --> R
+
+    subgraph R["✨ REFINEMENT AGENT"]
+        R1["Quality scoring (0-100)"]
+        R2["• Timing: 0-25  • Visual: 0-30"]
+        R3["• Animation: 0-15  • Narrative: 0-25"]
+    end
+
+    R --> Check{Score ≥ 90?}
+    Check -->|No| R
+    Check -->|Yes| F["🎥 Final Video Composition"]
+
+    style U fill:#3b82f6,color:#fff
+    style D fill:#8b5cf6,color:#fff
+    style S fill:#ec4899,color:#fff
+    style A fill:#f59e0b,color:#000
+    style R fill:#22c55e,color:#fff
+    style F fill:#6366f1,color:#fff
 ```
 
 **Director Agent Implementation:**
@@ -552,7 +528,7 @@ const audioBuffer = response.candidates[0].content.parts[0].inlineData.data;
 | Feature | Implementation | Purpose |
 |---------|---------------|---------|
 | **Structured Output** | JSON schemas in all 7 integrations | 100% parse reliability |
-| **Function Calling** | 15+ tools across 3 agents | Precise video composition |
+| **Function Calling** | 15+ tools across 4 agents | Precise video composition |
 | **Thinking Mode** | Server→Client, AI Preview | Complex reasoning tasks |
 | **Streaming** | Chat interface | Real-time responses |
 | **Long Context** | Full source code analysis | Accurate prop generation |
@@ -648,7 +624,137 @@ Present components in context with professional device frames:
 - **Rectangles, circles, lines** with gradients and stroke
 - **Dividers and badges** for professional layouts
 - **Custom SVG** with viewBox support
-- **Gradient backgrounds** (linear, radial)
+
+### Animated Gradient Backgrounds (NEW!)
+
+Full-featured gradient system for stunning visual backdrops:
+
+| Feature | Description |
+|---------|-------------|
+| **Gradient Types** | Linear, radial, and conic gradients |
+| **Multi-Color Stops** | Add unlimited color stops with position control |
+| **Animation** | Rotating angles and color-shifting effects |
+| **Size & Position** | Full control over placement and dimensions |
+
+```typescript
+// AI Tool: add_gradient
+add_gradient({
+  gradientType: 'linear',
+  colors: [
+    { color: '#6366f1', position: 0 },
+    { color: '#06b6d4', position: 50 },
+    { color: '#ec4899', position: 100 }
+  ],
+  angle: 135,
+  animate: true,
+  animateAngle: true,
+  speed: 1.5
+});
+```
+
+### Text Effects (NEW!)
+
+Professional-grade text styling with three new effect systems:
+
+| Effect | Description | Use Case |
+|--------|-------------|----------|
+| **Gradient Fill** | Multi-color gradient text with animation | Hero titles, branding |
+| **Glow Effect** | Customizable text glow with pulse animation | CTAs, emphasis |
+| **Glass Effect** | Frosted glass background with backdrop blur | Modern UI, overlays |
+
+```mermaid
+flowchart LR
+    subgraph G["🌈 GRADIENT FILL"]
+        G1["Multi-color stops"]
+        G2["Angle 0-360°"]
+        G3["Rotation animation"]
+    end
+
+    subgraph L["✨ GLOW EFFECT"]
+        L1["Custom color"]
+        L2["Intensity 0-100%"]
+        L3["Pulse animation"]
+    end
+
+    subgraph F["🪟 GLASS EFFECT"]
+        F1["Backdrop blur"]
+        F2["Opacity control"]
+        F3["Tint color"]
+    end
+
+    T[Text Element] --> G
+    T --> L
+    T --> F
+
+    style G fill:#ec4899,color:#fff
+    style L fill:#eab308,color:#000
+    style F fill:#22d3ee,color:#000
+    style T fill:#6366f1,color:#fff
+```
+
+### Spring Physics Animation System (NEW!)
+
+Professional-grade spring physics for natural, organic motion. Spring-based animations feel more alive than traditional easing curves.
+
+| Preset | Feel | Best For |
+|--------|------|----------|
+| **Smooth** | Controlled, professional | General UI, most animations |
+| **Snappy** | Quick, responsive | Buttons, micro-interactions |
+| **Heavy** | Slow, deliberate | Hero transitions, cinematic |
+| **Bouncy** | Playful, energetic | Celebrations, emphasis |
+| **Gentle** | Soft, elegant | Subtle movements, backgrounds |
+| **Wobbly** | Extreme overshoot | Attention-grabbing, fun effects |
+
+```typescript
+// AI Tool: add_keyframes with spring physics
+add_keyframes({
+  trackId: 'text-1',
+  itemId: 'title',
+  keyframes: [
+    { frame: 0, values: { opacity: 0, scale: 0.8 } },
+    {
+      frame: 30,
+      values: { opacity: 1, scale: 1 },
+      springPreset: 'bouncy'  // Natural bounce-in effect
+    }
+  ]
+});
+
+// Custom spring config for fine-tuned control
+add_keyframes({
+  keyframes: [{
+    frame: 30,
+    values: { positionY: 0.5 },
+    springConfig: {
+      mass: 1.5,      // Heavier feel
+      stiffness: 200, // Faster snap
+      damping: 15     // Some bounce
+    }
+  }]
+});
+```
+
+### Word-by-Word Text Animation (NEW!)
+
+Animate text word-by-word for more readable, impactful reveals. Perfect for sentences and longer text blocks.
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Letter** | Animate each character | Short titles, logos |
+| **Word** | Animate each word as a unit | Sentences, taglines, descriptions |
+
+```typescript
+// AI Tool: add_text_overlay with word animation
+add_text_overlay({
+  text: "Build videos from your React components",
+  letterAnimation: true,
+  letterAnimationMode: 'word',       // Animate word-by-word
+  letterAnimationType: 'slide-up',   // Each word slides up
+  letterStagger: 4,                  // 4 frames between words
+  letterDuration: 12,                // Each word takes 12 frames
+  letterEasing: 'spring'             // Natural spring motion
+});
+```
 
 ---
 
@@ -709,7 +815,7 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 | **Auto Component Discovery** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Code-Connected (Auto-Update)** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **AI Chat Refinement** | ✅ | ⚠️ Partial | ❌ | ❌ | ❌ |
-| **Multi-Agent Orchestration** | ✅ 3 agents | ❌ | ❌ | ❌ | ❌ |
+| **Multi-Agent Orchestration** | ✅ 4 agents | ❌ | ❌ | ❌ | ❌ |
 | **Server Component Support** | ✅ 190+ patterns | ❌ | ⚠️ Limited | N/A | N/A |
 | **Live Component Rendering** | ✅ Playwright | Manual | ✅ Docs only | ❌ | ❌ |
 | **TTS Voiceover** | ✅ 5 voices | Manual | ❌ | ❌ | ✅ |
@@ -774,97 +880,63 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                              SCENERY ARCHITECTURE                                │
-├──────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                  │
-│  ┌────────────────┐                                                              │
-│  │  GitHub Repo   │                                                              │
-│  │  (Any React)   │                                                              │
-│  └───────┬────────┘                                                              │
-│          │                                                                       │
-│          ▼                                                                       │
-│  ┌───────────────────────────────────────────────────────────────────────────┐   │
-│  │                     COMPONENT DISCOVERY PIPELINE                          │   │
-│  │                                                                           │   │
-│  │  ┌──────────┐   ┌──────────────┐   ┌─────────────┐   ┌────────────────┐  │   │
-│  │  │  Clone   │──▶│    Parse     │──▶│ Categorize  │──▶│ Generate Props │  │   │
-│  │  │  Repo    │   │  TypeScript  │   │  (Gemini)   │   │   (Gemini)     │  │   │
-│  │  └──────────┘   └──────────────┘   └─────────────┘   └────────────────┘  │   │
-│  │                                                              │            │   │
-│  │                                                              ▼            │   │
-│  │  ┌────────────────────────────────────────────────────────────────────┐  │   │
-│  │  │                    PREVIEW GENERATION                              │  │   │
-│  │  │                                                                    │  │   │
-│  │  │  ┌─────────────────────────────────────────────────────────────┐  │  │   │
-│  │  │  │ SERVER COMPONENT DETECTION (190+ patterns)                  │  │  │   │
-│  │  │  │ async/await, Prisma, Drizzle, NextAuth, Clerk, fs, node:*   │  │  │   │
-│  │  │  │                         │                                   │  │  │   │
-│  │  │  │                         ▼ (if detected)                     │  │  │   │
-│  │  │  │ TRANSFORM TO CLIENT (Gemini) → Remove async, mock DB calls  │  │  │   │
-│  │  │  └─────────────────────────────────────────────────────────────┘  │  │   │
-│  │  │                         │                                          │  │   │
-│  │  │                         ▼                                          │  │   │
-│  │  │  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐        │  │   │
-│  │  │  │ Playwright  │─────▶│     SSR     │─────▶│  AI-Only    │        │  │   │
-│  │  │  │ (95% acc)   │ fail │  (70% acc)  │ fail │  (50% acc)  │        │  │   │
-│  │  │  └─────────────┘      └─────────────┘      └─────────────┘        │  │   │
-│  │  │         │                                                          │  │   │
-│  │  │         ▼                                                          │  │   │
-│  │  │  Tailwind → Inline CSS (Gemini)                                   │  │   │
-│  │  └────────────────────────────────────────────────────────────────────┘  │   │
-│  └───────────────────────────────────────────────────────────────────────────┘   │
-│                                          │                                       │
-│                                          ▼                                       │
-│  ┌───────────────────────────────────────────────────────────────────────────┐   │
-│  │                    MULTI-AGENT VIDEO GENERATION                           │   │
-│  │                                                                           │   │
-│  │   User Prompt: "Create a video showing our auth flow"                    │   │
-│  │                              │                                            │   │
-│  │                              ▼                                            │   │
-│  │   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐               │   │
-│  │   │   DIRECTOR   │───▶│    SCENE     │───▶│  REFINEMENT  │               │   │
-│  │   │    AGENT     │    │   PLANNER    │    │    AGENT     │               │   │
-│  │   │              │    │              │    │              │               │   │
-│  │   │ • Plan tone  │    │ • Position   │    │ • Score 0-100│               │   │
-│  │   │ • Scene list │    │ • Animate    │    │ • Fix issues │               │   │
-│  │   │ • Narrative  │    │ • Cursor     │    │ • Re-iterate │               │   │
-│  │   └──────────────┘    └──────────────┘    └──────────────┘               │   │
-│  │                              │                    │                       │   │
-│  │                              │    ◀───────────────┘ (if score < 90)      │   │
-│  │                              │                    ▲                       │   │
-│  │                              │                    │                       │   │
-│  │                              │         ┌──────────────────────┐           │   │
-│  │                              │         │  💬 AI CHAT REFINE   │           │   │
-│  │                              │         │  User: "Slow down    │           │   │
-│  │                              │         │  the transitions"    │──────────┘   │
-│  │                              │         └──────────────────────┘               │
-│  │                              ▼                                            │   │
-│  │                    ┌──────────────┐                                       │   │
-│  │                    │  TTS ENGINE  │                                       │   │
-│  │                    │ (Gemini 2.5) │                                       │   │
-│  │                    └──────────────┘                                       │   │
-│  └───────────────────────────────────────────────────────────────────────────┘   │
-│                                          │                                       │
-│                                          ▼                                       │
-│  ┌───────────────────────────────────────────────────────────────────────────┐   │
-│  │                         VIDEO COMPOSITION                                 │   │
-│  │                                                                           │   │
-│  │   Remotion Engine ──▶ Timeline Editor ──▶ Lambda Export (MP4/GIF)        │   │
-│  │                                                                           │   │
-│  └───────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                  │
-│  ┌───────────────────────────────────────────────────────────────────────────┐   │
-│  │                         🔄 AUTO-SYNC LOOP                                 │   │
-│  │                                                                           │   │
-│  │   Repo Updated ──▶ Component Re-discovered ──▶ Preview Regenerated       │   │
-│  │                                         │                                 │   │
-│  │                                         └──▶ Videos Auto-Update           │   │
-│  │                                              (No manual editing needed)   │   │
-│  └───────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                  │
-└──────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    GH["📦 GitHub Repo<br/>(Any React)"]
+
+    subgraph discovery["🔍 COMPONENT DISCOVERY PIPELINE"]
+        direction LR
+        Clone["Clone Repo"] --> Parse["Parse TypeScript"]
+        Parse --> Cat["Categorize<br/>(Gemini)"]
+        Cat --> Props["Generate Props<br/>(Gemini)"]
+    end
+
+    subgraph preview["🖼️ PREVIEW GENERATION"]
+        direction TB
+        Server["Server Component Detection<br/>(190+ patterns)"]
+        Server --> Transform["Transform to Client<br/>(Gemini)"]
+        Transform --> PW["Playwright<br/>95% accuracy"]
+        PW -->|fail| SSR["SSR<br/>70% accuracy"]
+        SSR -->|fail| AI["AI-Only<br/>50% accuracy"]
+        PW & SSR & AI --> CSS["Tailwind → CSS<br/>(Gemini)"]
+    end
+
+    subgraph agents["🤖 MULTI-AGENT VIDEO GENERATION"]
+        direction LR
+        Director["🎬 Director<br/>• Plan tone<br/>• Scene list"]
+        Planner["🎨 Scene Planner<br/>• Position<br/>• Animate"]
+        Assembly["🔧 Assembly<br/>• Build tracks<br/>• Timing"]
+        Refine["✨ Refinement<br/>• Score 0-100<br/>• Fix issues"]
+
+        Director --> Planner --> Assembly --> Refine
+        Refine -->|"< 90"| Refine
+
+        Chat["💬 AI Chat<br/>Iterate instantly"]
+        Chat --> Refine
+    end
+
+    subgraph video["🎥 VIDEO COMPOSITION"]
+        Remotion["Remotion Engine"] --> Timeline["Timeline Editor"] --> Lambda["Lambda Export<br/>MP4/GIF"]
+    end
+
+    subgraph sync["🔄 AUTO-SYNC LOOP"]
+        Update["Repo Updated"] --> Rediscover["Re-discover"] --> Regen["Preview Regenerated"]
+        Regen --> AutoUpdate["Videos Auto-Update"]
+    end
+
+    GH --> discovery
+    discovery --> preview
+    preview --> agents
+    agents --> TTS["🎙️ TTS Engine<br/>(Gemini 2.5)"]
+    TTS --> video
+    video --> sync
+
+    style GH fill:#6366f1,color:#fff
+    style discovery fill:#1e1b4b,color:#fff
+    style preview fill:#0f172a,color:#fff
+    style agents fill:#1e1b4b,color:#fff
+    style video fill:#0f172a,color:#fff
+    style sync fill:#22c55e,color:#fff
 ```
 
 ---
@@ -875,11 +947,114 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 |-------|------------|---------|
 | **AI** | Gemini 3 Pro, Gemini 2.5 Flash TTS | All 7 AI integrations |
 | **Frontend** | Next.js 15, React 19, TypeScript | Production SPA |
-| **Video** | Remotion, AWS Lambda | Composition + export |
+| **Video Engine** | [Remotion](https://remotion.dev) | React-based video composition |
+| **Video Export** | Remotion Lambda (AWS) | Serverless MP4/GIF rendering |
 | **Editor** | Custom timeline, 30+ animations | Professional video editing |
-| **Rendering** | Playwright, esbuild | Real browser previews |
+| **Component Rendering** | Playwright, esbuild | Real browser previews |
 | **Database** | Supabase (Postgres) | Project + component storage |
 | **Hosting** | Fly.io (2 apps, auto-scale) | Production deployment |
+
+---
+
+## DevOps & Infrastructure
+
+Scenery runs on a **multi-service cloud architecture** designed for scalability and cost efficiency.
+
+### Deployment Architecture
+
+```mermaid
+flowchart TB
+    subgraph fly["☁️ FLY.IO"]
+        direction LR
+        Main["<b>scenery-gemini3</b><br/>Main Application<br/>• Next.js 15<br/>• 2GB RAM<br/>• Auto-scale 1-5"]
+        PW["<b>scenery-playwright</b><br/>Render Worker<br/>• Playwright + Chrome<br/>• 2GB RAM<br/>• Scales to 0 idle"]
+        Main <-->|HTTP| PW
+    end
+
+    subgraph aws["☁️ AWS"]
+        direction TB
+        Lambda["<b>Remotion Lambda</b><br/>• Serverless rendering<br/>• 2GB RAM, 900s timeout<br/>• MP4, GIF, WebM"]
+        S3["<b>S3 Bucket</b><br/>• Remotion bundle<br/>• Video output"]
+    end
+
+    subgraph supa["🗄️ SUPABASE"]
+        DB["<b>PostgreSQL</b><br/>• User auth<br/>• Project storage<br/>• Compositions<br/>• Real-time"]
+    end
+
+    fly --> aws
+    fly --> supa
+    aws --> supa
+
+    style fly fill:#8b5cf6,color:#fff
+    style aws fill:#f59e0b,color:#000
+    style supa fill:#22c55e,color:#fff
+```
+
+### Service Details
+
+| Service | Purpose | Specs | Cost |
+|---------|---------|-------|------|
+| **Fly.io Main App** | Next.js application, API routes, AI orchestration | 2GB RAM, auto-scale 1-5 | ~$15/mo |
+| **Fly.io Playwright Worker** | Browser-based component rendering | 2GB RAM, scales to 0 when idle | ~$6/mo |
+| **Remotion Lambda** | Serverless video export to MP4/GIF | 2GB RAM, 900s timeout, parallelized | Pay per render |
+| **AWS S3** | Remotion bundle hosting, video output storage | Standard tier | ~$2/mo |
+| **Supabase** | PostgreSQL, Auth, Storage | Free tier sufficient | $0 |
+
+### Why Remotion?
+
+[Remotion](https://remotion.dev) is a React-based video creation framework that powers Scenery's video engine:
+
+- **React-Native Composition**: Videos are React components with props, state, and hooks
+- **Frame-Perfect Control**: Every frame is a React render—predictable and debuggable
+- **Spring Physics**: Built-in spring animations for natural, organic motion
+- **AWS Lambda Export**: Parallelized rendering—60s video renders in ~30 seconds
+- **TypeScript**: Full type safety for video composition
+
+```typescript
+// Example: Remotion composition structure
+const MyVideo: React.FC = () => {
+  const frame = useCurrentFrame();
+  const opacity = interpolate(frame, [0, 30], [0, 1]);
+
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      <Component {...demoProps} />
+    </AbsoluteFill>
+  );
+};
+```
+
+### Deployment Commands
+
+```bash
+# Deploy main app to Fly.io
+fly deploy
+
+# Deploy Playwright worker
+cd playwright-worker && fly deploy
+
+# Deploy Remotion bundle to S3
+npm run deploy:remotion
+
+# Deploy new Lambda function (with increased timeout)
+npx remotion lambda functions deploy --memory=2048 --disk=2048 --timeout=900
+```
+
+### Environment Variables
+
+```bash
+# Fly.io Secrets (Main App)
+GEMINI_API_KEY=...
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+REMOTION_AWS_REGION=us-east-1
+REMOTION_AWS_ACCESS_KEY_ID=...
+REMOTION_AWS_SECRET_ACCESS_KEY=...
+REMOTION_SERVE_URL=https://...s3.amazonaws.com/sites/scenery/index.html
+REMOTION_LAMBDA_FUNCTION_NAME=remotion-render-4-0-409-mem2048mb-disk2048mb-900sec
+PLAYWRIGHT_WORKER_URL=https://scenery-playwright.fly.dev
+PLAYWRIGHT_WORKER_SECRET=...
+```
 
 ---
 
@@ -909,7 +1084,6 @@ npm run dev
 |----------|-----|
 | **Live Demo** | [scenery-gemini3.fly.dev](https://scenery-gemini3.fly.dev) |
 | **Source Code** | [github.com/Arty2001/scenery-gemini3-hackathon](https://github.com/Arty2001/scenery-gemini3-hackathon) |
-| **Demo Video** | [YouTube](YOUR_YOUTUBE_LINK_HERE) |
 
 ---
 
@@ -921,7 +1095,7 @@ Scenery uses **Gemini 3 Pro across 7 distinct integrations** that form the core 
 
 **Component Discovery:** (1) Structured JSON for categorization, (2) 3-tier props generation (Storybook extraction → AI-generated → defaults), (3) **Server Component transformation**—190+ patterns detect async/await, Prisma, NextAuth, etc., then Gemini transforms to client-safe code, (4) Tailwind→inline CSS conversion, (5) AI fallback preview with thinking mode.
 
-**Video Generation:** (6) Multi-agent orchestration—Director plans narrative, Scene Planner designs 30+ animation presets and 6 cursor interaction types, Refinement Agent scores 0-100 and iterates via chat. (7) Gemini 2.5 Flash TTS with 5 voice options.
+**Video Generation:** (6) Multi-agent orchestration (4 stages)—Director plans narrative, Scene Planner designs spring-based animations and cursor interactions, Assembly Agent builds tracks, Refinement Agent scores 0-100 and iterates. (7) Gemini 2.5 Flash TTS with 5 voice options.
 
 **Professional Editor:** Timeline-based editing with particle effects (6 types), device frame mockups, shape/SVG elements, keyframe animations, and real-time auto-save.
 

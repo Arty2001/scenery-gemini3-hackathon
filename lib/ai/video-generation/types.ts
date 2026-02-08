@@ -105,6 +105,9 @@ export interface DetailedScene {
   /** Shape elements (backgrounds, badges, etc.) */
   shapes: SceneShape[];
 
+  /** Image elements (logos, icons, screenshots) */
+  images?: SceneImage[];
+
   /** Cursor interactions (for tutorials) */
   cursor?: SceneCursor;
 
@@ -154,6 +157,26 @@ export interface SceneShape {
   viewBox?: string;
   offsetFrames: number;
   durationInFrames?: number;
+  keyframes?: SceneKeyframe[];
+}
+
+export interface SceneImage {
+  /** Image source URL or path */
+  src: string;
+  /** Alt text description */
+  alt?: string;
+  /** Normalized position (0-1) */
+  position: { x: number; y: number };
+  /** Normalized size (0-1 relative to canvas) */
+  width: number;
+  height: number;
+  /** Clip shape for image */
+  clipShape?: 'none' | 'circle' | 'rounded-rect' | 'hexagon' | 'diamond';
+  /** Frames after scene start */
+  offsetFrames: number;
+  /** Duration in frames */
+  durationInFrames?: number;
+  /** Keyframe animations */
   keyframes?: SceneKeyframe[];
 }
 
@@ -230,6 +253,18 @@ export interface AgentContext {
 
   /** Project ID for asset storage */
   projectId?: string;
+
+  /** Available uploaded assets (images, videos, audio) */
+  availableAssets?: AvailableAsset[];
+}
+
+export interface AvailableAsset {
+  /** Display name of the asset */
+  name: string;
+  /** Public URL to use in compositions */
+  url: string;
+  /** Asset type */
+  type: 'image' | 'video' | 'audio' | 'other';
 }
 
 export interface ComponentInfo {

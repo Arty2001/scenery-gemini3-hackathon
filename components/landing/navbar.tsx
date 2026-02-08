@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -19,8 +20,15 @@ export function Navbar() {
       }`}
     >
       <nav className="max-w-5xl mx-auto flex items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-bold text-white">
-          Scenery
+        <Link href="/" className="flex items-center gap-2">
+          <Image
+            src="/scenery-logo.png"
+            alt="Scenery"
+            width={120}
+            height={40}
+            className="h-8 w-auto"
+            priority
+          />
         </Link>
 
         <Link

@@ -41,6 +41,7 @@ export type {
   DetailedScene,
   SceneText,
   SceneShape,
+  SceneImage,
   SceneCursor,
   SceneKeyframe,
   CursorKeyframe,
@@ -49,5 +50,6 @@ export type {
   GeneratedItem,
   AgentContext,
   ComponentInfo,
+  AvailableAsset,
   ProgressCallback,
 } from './types';

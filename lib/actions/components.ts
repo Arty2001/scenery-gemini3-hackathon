@@ -659,6 +659,85 @@ export async function getComponentCodes(
 }
 
 /**
+ * Generate preview HTML with custom props (without saving to DB).
+ * Used for live preview updates when editing props in the UI.
+ */
+export async function generatePreviewWithProps(
+  componentId: string,
+  customProps: Record<string, unknown>
+): Promise<{
+  success: boolean;
+  error?: string;
+  previewHtml?: string;
+}> {
+  const supabase = await createClient();
+
+  // Demo projects allow anonymous access, regular projects require auth
+  const { data: component, error: compError } = await supabase
+    .from('discovered_components')
+    .select(`
+      id,
+      component_name,
+      file_path,
+      props_schema,
+      category,
+      description,
+      repository:repository_connections!inner(
+        id,
+        owner,
+        name,
+        local_path
+      )
+    `)
+    .eq('id', componentId)
+    .single();
+
+  if (compError || !component) {
+    return { success: false, error: 'Component not found' };
+  }
+
+  const repo = component.repository as unknown as { id: string; owner: string; name: string; local_path: string | null };
+  if (!repo?.local_path) {
+    return { success: false, error: 'Repository local path not found' };
+  }
+
+  const repoContext: RepoContext = { name: repo.name, owner: repo.owner };
+
+  // Read source code
+  let sourceCode: string | undefined;
+  try {
+    sourceCode = await readFile(path.join(repo.local_path, component.file_path), 'utf-8');
+  } catch {
+    return { success: false, error: 'Could not read component source file' };
+  }
+
+  // Build component info with custom props
+  const compInfo: ComponentInfo = {
+    filePath: component.file_path,
+    componentName: component.component_name,
+    props: component.props_schema as unknown as PropInfo[],
+    category: component.category ?? undefined,
+    demoProps: customProps, // Use custom props instead of stored demo_props
+    description: component.description ?? undefined,
+  };
+
+  // Generate preview HTML
+  try {
+    const previewResult = await generatePreviewHtml(compInfo, repoContext, sourceCode);
+
+    if (!previewResult?.html) {
+      return { success: false, error: 'Preview generation returned empty result' };
+    }
+
+    console.log(`[live-preview] ${component.component_name}: generated with custom props`);
+
+    return { success: true, previewHtml: previewResult.html };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+/**
  * Get a single component by ID.
  * Used by properties panel to load component schema for props editing.
  */

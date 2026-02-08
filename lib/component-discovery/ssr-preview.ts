@@ -4,6 +4,7 @@ import type { ComponentInfo, RepoContext } from './types';
 import { createMockRequire } from './mock-registry';
 import { playwrightClient } from './playwright-client';
 import { bundleForBrowser } from './browser-bundler';
+import { analyzeAndFix, applyFix } from './render-recovery';
 import * as esbuild from 'esbuild';
 import { z } from 'zod';
 
@@ -416,7 +417,7 @@ After:
 Return the COMPLETE transformed code that can render in a browser. Make sure all imports used in the code are included.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -590,7 +591,7 @@ ${html}
 Return ONLY the converted HTML with inline styles. No explanation.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -676,15 +677,77 @@ export async function generatePlaywrightPreviewHtml(
   console.log(`[playwright-preview] ${component.componentName}: bundle success (${bundleResult.bundledJs.length} chars), rendering...`);
 
   // Step 2: Render in Playwright worker
-  const renderResult = await playwrightClient.renderWithRetry({
+  let renderResult = await playwrightClient.renderWithRetry({
     bundledJs: bundleResult.bundledJs,
     componentName: component.componentName,
     props: component.demoProps,
     timeout: 15000,
   });
 
+  // If render failed, use AI to analyze the component holistically and fix it
+  // Template already handles most issues, but some components need specific props/data
+  const MAX_RECOVERY_ATTEMPTS = 2;
+  let currentProps = { ...component.demoProps };
+  let accumulatedSetup = '';
+
+  for (let attempt = 0; attempt < MAX_RECOVERY_ATTEMPTS && !renderResult.success; attempt++) {
+    const errorMsg = renderResult.error || 'Unknown render error';
+    const consoleLog = renderResult.consoleLog || '';
+
+    console.log(`[playwright-preview] ${component.componentName}: render failed (attempt ${attempt + 1}): ${errorMsg}`);
+
+    // Ask AI to analyze the whole component and suggest fixes
+    const fix = await analyzeAndFix(
+      component.componentName,
+      codeToBundle,
+      errorMsg,
+      consoleLog,
+      currentProps
+    );
+
+    // If AI says skip, give up
+    if (fix.shouldSkip) {
+      console.log(`[playwright-preview] ${component.componentName}: AI says skip - ${fix.reason}`);
+      return null;
+    }
+
+    // Check if AI suggested any changes
+    const hasChanges = Object.keys(fix.propsToAdd).length > 0 ||
+                       fix.propsToRemove.length > 0 ||
+                       fix.mockCode.length > 0;
+
+    if (!hasChanges) {
+      console.log(`[playwright-preview] ${component.componentName}: AI found no fixes to apply`);
+      return null;
+    }
+
+    // Apply the fixes
+    const { newProps, newSetupCode } = applyFix(fix, currentProps, accumulatedSetup);
+    currentProps = newProps;
+    accumulatedSetup = newSetupCode;
+
+    console.log(`[playwright-preview] ${component.componentName}: applying AI fix - ${fix.reason}`);
+
+    // Rebuild with fixes
+    const fixedBundle = accumulatedSetup + '\n' + bundleResult.bundledJs;
+
+    // Retry render
+    renderResult = await playwrightClient.renderWithRetry({
+      bundledJs: fixedBundle,
+      componentName: component.componentName,
+      props: currentProps,
+      timeout: 15000,
+    });
+
+    if (renderResult.success && renderResult.html) {
+      console.log(`[playwright-preview] ${component.componentName}: recovery successful after ${attempt + 1} attempt(s)!`);
+      break;
+    }
+  }
+
+  // Final check
   if (!renderResult.success || !renderResult.html) {
-    console.log(`[playwright-preview] ${component.componentName}: render failed: ${renderResult.error}`);
+    console.log(`[playwright-preview] ${component.componentName}: all recovery attempts failed`);
     return null;
   }
 

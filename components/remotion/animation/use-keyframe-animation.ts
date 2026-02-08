@@ -1,9 +1,15 @@
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
-import type { PropertyKeyframe, EasingType } from '@/lib/composition/types';
+import type { PropertyKeyframe, EasingType, SpringConfig, SpringPreset } from '@/lib/composition/types';
+import { resolveSpringConfig, DEFAULT_SPRING_CONFIG } from '@/lib/spring-presets';
 
 /**
  * Interpolates between keyframe values for a given property at the current frame.
  * Returns a Record of property name → current interpolated value.
+ *
+ * Supports spring physics for natural, organic motion:
+ * - Set `springPreset` on keyframe to use a preset (smooth, snappy, bouncy, etc.)
+ * - Set `springConfig` for custom spring parameters (mass, stiffness, damping)
+ * - Spring physics override standard easing when specified
  *
  * Usage:
  *   const kfValues = useKeyframeAnimation(item.keyframes);
@@ -93,8 +99,11 @@ export function useKeyframeAnimation(
     const localFrame = frame - prevKf.frame;
     const easing = nextKf.easing ?? 'ease-out';
 
-    // Get 0-1 progress with easing
-    const progress = applyEasing(localFrame, segmentDuration, easing, fps);
+    // Resolve spring configuration (custom config takes priority over preset)
+    const springConfig = resolveSpringConfig(nextKf.springConfig, nextKf.springPreset);
+
+    // Get 0-1 progress with easing or spring physics
+    const progress = applyEasing(localFrame, segmentDuration, easing, fps, springConfig);
 
     // Final safety check - ensure both values are valid numbers
     const prevVal = prevKf.values![prop];
@@ -112,11 +121,19 @@ export function useKeyframeAnimation(
   return result;
 }
 
+/**
+ * Apply easing or spring physics to get interpolation progress (0-1).
+ *
+ * Spring physics create natural, organic motion that feels more alive than
+ * traditional easing curves. When springConfig is provided, it takes priority
+ * over the easing type.
+ */
 function applyEasing(
   localFrame: number,
   duration: number,
   easing: EasingType,
   fps: number,
+  springConfig?: SpringConfig | null,
 ): number {
   // Safety: ensure duration is valid and > 0
   if (!isFinite(duration) || duration <= 0) {
@@ -128,6 +145,20 @@ function applyEasing(
     return 0;
   }
 
+  // Use spring physics when spring config is provided
+  if (springConfig) {
+    return spring({
+      frame: localFrame,
+      fps,
+      durationInFrames: Math.max(1, duration),
+      config: {
+        mass: springConfig.mass,
+        stiffness: springConfig.stiffness,
+        damping: springConfig.damping,
+      },
+    });
+  }
+
   switch (easing) {
     case 'linear':
       return interpolate(localFrame, [0, duration], [0, 1], {
@@ -136,11 +167,16 @@ function applyEasing(
       });
 
     case 'spring':
+      // Fallback spring with default config when no custom config provided
       return spring({
         frame: localFrame,
         fps,
-        durationInFrames: Math.max(1, duration), // Ensure at least 1 frame
-        config: { damping: 200 },
+        durationInFrames: Math.max(1, duration),
+        config: {
+          mass: DEFAULT_SPRING_CONFIG.mass,
+          stiffness: DEFAULT_SPRING_CONFIG.stiffness,
+          damping: DEFAULT_SPRING_CONFIG.damping,
+        },
       });
 
     case 'ease-in': {

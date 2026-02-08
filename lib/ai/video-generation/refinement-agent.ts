@@ -73,10 +73,12 @@ Your role is to review a generated video composition and identify issues or impr
 - Audience engagement is maintained
 
 ### Animation Quality (Weight: 15%)
-- Animations feel smooth and natural
-- Easing is appropriate for the motion type
-- Animation intensity matches the style
-- No jarring or abrupt movements
+- Animations use spring-based types (spring-scale, spring-slide, spring-bounce) NOT basic scale/slide
+- Spring presets match the video tone (smooth for professional, bouncy for playful)
+- Animations feel smooth and natural with proper spring physics
+- Elements have stagger delays (10-20 frames between elements) - NOT all at once!
+- Animation intensity matches the style (use appropriate springPreset)
+- No jarring or abrupt movements - spring physics should handle easing
 
 ### Accessibility (Weight: 5%)
 - Text is readable (size, contrast)
@@ -259,7 +261,7 @@ export async function runRefinementAgent(
   const prompt = buildRefinementPrompt(composition, videoPlan, detailedScenes, context);
 
   const response = await client.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     contents: [
       {
         role: 'user',

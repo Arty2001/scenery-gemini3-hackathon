@@ -52,6 +52,7 @@ export const RemotionPreview = forwardRef<
 
   // Get composition state from Zustand store
   const tracks = useCompositionStore((s) => s.tracks);
+  const scenes = useCompositionStore((s) => s.scenes);
   const fps = useCompositionStore((s) => s.fps);
   const durationInFrames = useCompositionStore((s) => s.durationInFrames);
   const compositionWidth = useCompositionStore((s) => s.width);
@@ -96,9 +97,10 @@ export const RemotionPreview = forwardRef<
   const inputProps = useMemo(
     () => ({
       tracks,
+      scenes: scenes.length > 0 ? scenes : undefined,
       componentPreviews,
     }),
-    [tracks, componentPreviews]
+    [tracks, scenes, componentPreviews]
   );
 
   return (

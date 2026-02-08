@@ -28,9 +28,20 @@ import { TimelineTrack } from './timeline-track';
 import { TimelineRuler } from './timeline-ruler';
 import { Playhead } from './playhead';
 import { SnapIndicator } from './snap-indicator';
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { SceneNavigator } from './scene-navigator';
+import { ZoomIn, ZoomOut, Maximize2, Plus, Type, Square, Image, Video, Music, MousePointer2, Sparkles, Layers, Palette, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import type { Track } from '@/lib/composition/types';
 
 interface TimelineProps {
   selectedItemId: string | null;
@@ -44,9 +55,39 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
   const tracks = useCompositionStore((s) => s.tracks);
   const durationInFrames = useCompositionStore((s) => s.durationInFrames);
   const fps = useCompositionStore((s) => s.fps);
+  const setDuration = useCompositionStore((s) => s.setDuration);
   const updateItem = useCompositionStore((s) => s.updateItem);
   const removeItem = useCompositionStore((s) => s.removeItem);
   const reorderTrack = useCompositionStore((s) => s.reorderTrack);
+  const addTrack = useCompositionStore((s) => s.addTrack);
+  const selectedItemIds = useCompositionStore((s) => s.selectedItemIds);
+  const toggleItemSelection = useCompositionStore((s) => s.toggleItemSelection);
+  const clearSelection = useCompositionStore((s) => s.clearSelection);
+
+  // Track type options for the dropdown
+  const trackTypes: { type: Track['type']; label: string; icon: typeof Type }[] = [
+    { type: 'text', label: 'Text', icon: Type },
+    { type: 'shape', label: 'Shape', icon: Square },
+    { type: 'gradient', label: 'Gradient', icon: Palette },
+    { type: 'image', label: 'Image', icon: Image },
+    { type: 'video', label: 'Video', icon: Video },
+    { type: 'audio', label: 'Audio', icon: Music },
+    { type: 'component', label: 'Component', icon: Layers },
+    { type: 'cursor', label: 'Cursor', icon: MousePointer2 },
+    { type: 'particles', label: 'Particles', icon: Sparkles },
+  ];
+
+  const handleAddTrack = useCallback((type: Track['type']) => {
+    const typeLabel = trackTypes.find(t => t.type === type)?.label || type;
+    const existingCount = tracks.filter(t => t.type === type).length;
+    addTrack({
+      name: `${typeLabel} ${existingCount + 1}`,
+      type,
+      items: [],
+      locked: false,
+      visible: true,
+    });
+  }, [addTrack, tracks, trackTypes]);
 
   // Zoom state
   const {
@@ -61,6 +102,12 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
 
   // Active drag state for overlay
   const [, setActiveId] = useState<string | null>(null);
+
+  // Prevent hydration mismatch with Radix DropdownMenu
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Snap points
   const snapPoints = useSnapPoints();
@@ -104,9 +151,22 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
       const frameDelta = pixelsToFrames(delta.x, pixelsPerFrame);
 
       if (data.type === 'clip') {
-        // Move clip to new position
-        const newFrom = Math.max(0, data.originalFrom + frameDelta);
-        updateItem(data.trackId, data.itemId, { from: newFrom });
+        // Move all selected clips (or just the dragged one if not in selection)
+        const itemsToMove = selectedItemIds.includes(data.itemId)
+          ? selectedItemIds
+          : [data.itemId];
+
+        // Find and update each selected item
+        for (const itemId of itemsToMove) {
+          for (const track of tracks) {
+            const item = track.items.find((i) => i.id === itemId);
+            if (item && !track.locked) {
+              const newFrom = Math.max(0, item.from + frameDelta);
+              updateItem(track.id, itemId, { from: newFrom });
+              break;
+            }
+          }
+        }
       } else if (data.type === 'resize') {
         // Handle resize (implemented in 06-04)
         if (data.edge === 'start') {
@@ -199,22 +259,40 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
     [tracks, reorderTrack]
   );
 
-  // Keyboard: delete selected clip
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedItemId) {
-        // Don't delete if user is typing in an input
-        if ((e.target as HTMLElement).tagName === 'INPUT') return;
-        for (const track of tracks) {
-          if (track.items.some((item) => item.id === selectedItemId)) {
-            removeItem(track.id, selectedItemId);
-            onSelectItem(null);
-            break;
-          }
-        }
+  // Handle item selection with multi-select support
+  const handleSelectItem = useCallback(
+    (itemId: string | null, addToSelection?: boolean) => {
+      if (itemId === null) {
+        clearSelection();
+        onSelectItem(null);
+      } else {
+        toggleItemSelection(itemId, addToSelection);
       }
     },
-    [selectedItemId, tracks, removeItem, onSelectItem]
+    [toggleItemSelection, clearSelection, onSelectItem]
+  );
+
+  // Keyboard: delete selected clips
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedItemIds.length > 0) {
+        // Don't delete if user is typing in an input
+        if ((e.target as HTMLElement).tagName === 'INPUT') return;
+
+        // Delete all selected items
+        for (const itemId of selectedItemIds) {
+          for (const track of tracks) {
+            if (track.items.some((item) => item.id === itemId)) {
+              removeItem(track.id, itemId);
+              break;
+            }
+          }
+        }
+        clearSelection();
+        onSelectItem(null);
+      }
+    },
+    [selectedItemIds, tracks, removeItem, clearSelection, onSelectItem]
   );
 
   const timelineWidth = calculateTimelineWidth(durationInFrames, pixelsPerFrame);
@@ -226,44 +304,108 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
       onKeyDown={handleKeyDown}
     >
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-background">
-        <span className="text-sm font-medium">Timeline</span>
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-background shrink-0">
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={zoomOut}
-            title="Zoom out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Slider
-            value={[zoom]}
-            onValueChange={([v]) => setZoom(v)}
-            min={0.1}
-            max={10}
-            step={0.1}
-            className="w-24"
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={zoomIn}
-            title="Zoom in"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => fitToView(containerWidth - 96, durationInFrames)}
-            title="Fit to view"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </Button>
-          <span className="text-xs text-muted-foreground w-12">
-            {Math.round(zoom * 100)}%
-          </span>
+          <span className="text-sm font-medium">Timeline</span>
+          {mounted ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 gap-1">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Track
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel className="text-xs">Track Type</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {trackTypes.map(({ type, label, icon: Icon }) => (
+                  <DropdownMenuItem
+                    key={type}
+                    onClick={() => handleAddTrack(type)}
+                    className="gap-2"
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="outline" size="sm" className="h-7 gap-1" disabled>
+              <Plus className="h-3.5 w-3.5" />
+              Add Track
+            </Button>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          {/* Duration control */}
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={Math.round(durationInFrames / fps)}
+              key={`duration-${durationInFrames}`}
+              onBlur={(e) => {
+                const seconds = parseFloat(e.target.value);
+                if (!isNaN(seconds) && seconds > 0) {
+                  setDuration(Math.round(seconds * fps));
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const seconds = parseFloat(e.currentTarget.value);
+                  if (!isNaN(seconds) && seconds > 0) {
+                    setDuration(Math.round(seconds * fps));
+                  }
+                  e.currentTarget.blur();
+                }
+              }}
+              className="h-7 w-16 text-xs"
+              title="Video duration in seconds"
+            />
+            <span className="text-xs text-muted-foreground">sec</span>
+          </div>
+
+          {/* Zoom controls */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={zoomOut}
+              title="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <Slider
+              value={[zoom]}
+              onValueChange={([v]) => setZoom(v)}
+              min={0.1}
+              max={10}
+              step={0.1}
+              className="w-24"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={zoomIn}
+              title="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fitToView(containerWidth - 96, durationInFrames)}
+              title="Fit to view"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground w-12">
+              {Math.round(zoom * 100)}%
+            </span>
+          </div>
         </div>
       </div>
 
@@ -274,6 +416,9 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
         onWheel={handleWheel}
       >
         <div style={{ width: timelineWidth, minWidth: '100%' }}>
+          {/* Scene navigator */}
+          <SceneNavigator pixelsPerFrame={pixelsPerFrame} />
+
           {/* Time ruler */}
           <TimelineRuler
             durationInFrames={durationInFrames}
@@ -307,7 +452,8 @@ export function Timeline({ selectedItemId, onSelectItem }: TimelineProps) {
                   track={track}
                   pixelsPerFrame={pixelsPerFrame}
                   selectedItemId={selectedItemId}
-                  onSelectItem={onSelectItem}
+                  selectedItemIds={selectedItemIds}
+                  onSelectItem={handleSelectItem}
                   onReorderStart={handleReorderStart}
                 />
               ))}

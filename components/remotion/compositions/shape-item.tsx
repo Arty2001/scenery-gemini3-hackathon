@@ -21,8 +21,8 @@ export function ShapeItemRenderer({ item }: ShapeItemRendererProps) {
 
   const posX = kf.positionX ?? item.position?.x ?? 0.5;
   const posY = kf.positionY ?? item.position?.y ?? 0.5;
-  const kfWidth = kf.width ?? item.width;
-  const kfHeight = kf.height ?? item.height;
+  const kfWidth = kf.width ?? item.width ?? 0.1;
+  const kfHeight = kf.height ?? item.height ?? 0.1;
   const kfOpacity = kf.opacity ?? item.opacity ?? 1;
   const kfScale = kf.scale ?? 1;
   const kfRotation = kf.rotation ?? 0;

@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Plus, Loader2, Blocks, ChevronDown, ChevronRight,
   Type, Square, Circle, Minus, Palette, SeparatorHorizontal, Tag, Image,
-  RefreshCw,
+  RefreshCw, Code, Trash2,
 } from 'lucide-react';
 import { regenerateComponentPreview } from '@/lib/actions/components';
+import { listCustomComponents, deleteCustomComponent, type CustomComponent } from '@/lib/actions/custom-components';
 import { useCompositionStore } from '@/lib/composition';
 import type { ComponentWithId } from '@/lib/actions/components';
-import type { ComponentItem } from '@/lib/composition/types';
+import type { ComponentItem, CustomHtmlItem } from '@/lib/composition/types';
 import { BASE_ELEMENTS, createBaseElement, type BaseElementId } from '@/lib/composition/base-elements';
+import { HtmlImportModal } from './html-import-modal';
 
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
   Type, Square, Circle, Minus, Palette, SeparatorHorizontal, Tag, Image,
@@ -22,15 +24,26 @@ interface ComponentLibraryPanelProps {
 
 export function ComponentLibraryPanel({ projectId }: ComponentLibraryPanelProps) {
   const [components, setComponents] = useState<ComponentWithId[]>([]);
+  const [customComponents, setCustomComponents] = useState<CustomComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [basicsOpen, setBasicsOpen] = useState(true);
+  const [customOpen, setCustomOpen] = useState(true);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const tracks = useCompositionStore((s) => s.tracks);
   const addTrack = useCompositionStore((s) => s.addTrack);
   const addItem = useCompositionStore((s) => s.addItem);
   const currentFrame = useCompositionStore((s) => s.currentFrame);
+
+  const fetchCustomComponents = useCallback(async () => {
+    try {
+      const data = await listCustomComponents(projectId);
+      setCustomComponents(data);
+    } catch {
+      // ignore
+    }
+  }, [projectId]);
 
   useEffect(() => {
     async function fetchComponents() {
@@ -47,7 +60,8 @@ export function ComponentLibraryPanel({ projectId }: ComponentLibraryPanelProps)
       }
     }
     fetchComponents();
-  }, [projectId]);
+    fetchCustomComponents();
+  }, [projectId, fetchCustomComponents]);
 
   const filtered = search
     ? components.filter(
@@ -57,6 +71,15 @@ export function ComponentLibraryPanel({ projectId }: ComponentLibraryPanelProps)
           c.category?.toLowerCase().includes(search.toLowerCase())
       )
     : components;
+
+  const filteredCustom = search
+    ? customComponents.filter(
+        (c) =>
+          c.name.toLowerCase().includes(search.toLowerCase()) ||
+          c.description?.toLowerCase().includes(search.toLowerCase()) ||
+          c.category?.toLowerCase().includes(search.toLowerCase())
+      )
+    : customComponents;
 
   const filteredBaseElements = search
     ? BASE_ELEMENTS.filter(
@@ -127,10 +150,49 @@ export function ComponentLibraryPanel({ projectId }: ComponentLibraryPanelProps)
     }
   };
 
+  const handleAddCustomComponent = (custom: CustomComponent) => {
+    addTrack({
+      name: custom.name,
+      type: 'custom-html',
+      locked: false,
+      visible: true,
+      items: [],
+    });
+    const newTrack = useCompositionStore.getState().tracks[
+      useCompositionStore.getState().tracks.length - 1
+    ];
+    if (!newTrack) return;
+
+    addItem(newTrack.id, {
+      type: 'custom-html',
+      customComponentId: custom.id,
+      html: custom.previewHtml,
+      from: currentFrame,
+      durationInFrames: 150,
+      displaySize: 'laptop',
+      backgroundColor: '#ffffff',
+    } as Omit<CustomHtmlItem, 'id'>);
+  };
+
+  const handleDeleteCustomComponent = async (e: React.MouseEvent, componentId: string) => {
+    e.stopPropagation();
+    if (!confirm('Delete this custom component?')) return;
+
+    setDeletingId(componentId);
+    try {
+      await deleteCustomComponent(componentId);
+      setCustomComponents(prev => prev.filter(c => c.id !== componentId));
+    } catch (err) {
+      console.error('Delete error:', err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Search */}
-      <div className="p-2 border-b">
+      {/* Search + Import */}
+      <div className="p-2 border-b space-y-2">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
@@ -141,6 +203,7 @@ export function ComponentLibraryPanel({ projectId }: ComponentLibraryPanelProps)
             className="w-full rounded-md border bg-background pl-7 pr-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
+        <HtmlImportModal projectId={projectId} onImported={fetchCustomComponents} />
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -178,6 +241,73 @@ export function ComponentLibraryPanel({ projectId }: ComponentLibraryPanelProps)
                     </button>
                   );
                 })}
+              </div>
+            )}
+            <div className="border-b" />
+          </div>
+        )}
+
+        {/* Custom HTML components section */}
+        {filteredCustom.length > 0 && (
+          <div>
+            <button
+              onClick={() => setCustomOpen(!customOpen)}
+              className="flex items-center gap-1.5 w-full px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {customOpen ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              <Code className="h-3 w-3" />
+              Imported HTML
+            </button>
+            {customOpen && (
+              <div>
+                {filteredCustom.map((custom) => (
+                  <div
+                    key={custom.id}
+                    className="group flex items-start gap-3 p-2 hover:bg-accent/50 cursor-pointer border-b border-border/50"
+                    onClick={() => handleAddCustomComponent(custom)}
+                  >
+                    <div className="w-16 h-10 rounded border bg-white flex-shrink-0 overflow-hidden relative">
+                      <div
+                        dangerouslySetInnerHTML={{ __html: custom.previewHtml }}
+                        className="absolute inset-0 origin-top-left"
+                        style={{
+                          width: '400%',
+                          height: '400%',
+                          transform: 'scale(0.25)',
+                          overflow: 'hidden',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium truncate">
+                          {custom.name}
+                        </span>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={(e) => handleDeleteCustomComponent(e, custom.id)}
+                            disabled={deletingId === custom.id}
+                            className="p-0.5 rounded hover:bg-destructive/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Delete"
+                          >
+                            <Trash2 className={`h-3 w-3 text-destructive ${deletingId === custom.id ? 'animate-pulse' : ''}`} />
+                          </button>
+                          <Plus className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </div>
+                      {custom.category && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {custom.category}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             <div className="border-b" />

@@ -10,6 +10,7 @@ export interface PlaywrightRenderOptions {
   componentName: string;
   props: Record<string, unknown>;
   timeout?: number;
+  wrapperName?: string; // Optional provider wrapper (e.g., 'ThemeProvider')
 }
 
 export interface PlaywrightRenderResult {
@@ -17,6 +18,7 @@ export interface PlaywrightRenderResult {
   html?: string;
   error?: string;
   renderTime?: number;
+  consoleLog?: string; // Browser console output for debugging
 }
 
 class PlaywrightClient {
@@ -67,7 +69,7 @@ class PlaywrightClient {
       };
     }
 
-    const { bundledJs, componentName, props, timeout = 15000 } = options;
+    const { bundledJs, componentName, props, timeout = 15000, wrapperName } = options;
 
     try {
       const headers: Record<string, string> = {
@@ -86,6 +88,7 @@ class PlaywrightClient {
           componentName,
           props,
           timeout,
+          wrapperName,
         }),
         signal: AbortSignal.timeout(timeout + 5000), // Add buffer for network latency
       });

@@ -383,11 +383,14 @@ export function CursorOverlay({ item }: CursorOverlayProps) {
   });
 
   // Filter out any keyframes with invalid values and ensure we have at least one
-  const validKeyframes = resolvedKeyframes.filter(
-    (k) => typeof k.frame === 'number' && isFinite(k.frame) &&
-           typeof k.x === 'number' && isFinite(k.x) &&
-           typeof k.y === 'number' && isFinite(k.y)
-  );
+  // Then sort by frame to ensure monotonically increasing order for interpolate()
+  const validKeyframes = resolvedKeyframes
+    .filter(
+      (k) => typeof k.frame === 'number' && isFinite(k.frame) &&
+             typeof k.x === 'number' && isFinite(k.x) &&
+             typeof k.y === 'number' && isFinite(k.y)
+    )
+    .sort((a, b) => a.frame - b.frame);
 
   // Fallback if no valid keyframes
   if (validKeyframes.length === 0) {

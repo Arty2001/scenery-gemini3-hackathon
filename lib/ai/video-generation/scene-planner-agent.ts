@@ -21,6 +21,7 @@ import type {
   DetailedScene,
   SceneText,
   SceneShape,
+  SceneImage,
   SceneCursor,
   SceneKeyframe,
   AgentContext,
@@ -151,19 +152,46 @@ Label:      y: 0.92, x: 0.5, backgroundColor for visibility
 [{frame: 0, opacity: 0}, {frame: 15, opacity: 1}]   // ✅ GOOD
 \`\`\`
 
-## Animation Principles (PROFESSIONAL PATTERNS)
+## Spring-Based Animation System (Remotion Trailer Inspired)
 
-### 1. Spring Physics by Intensity
+### Enter/Exit Animation Types
 
-| Intensity | Feel | Animation Pattern | Timing |
-|-----------|------|-------------------|--------|
-| **low** | Smooth, corporate | fade-in, blur-in | 20-30 frames |
-| **medium** | Balanced, engaging | bounce, spring-pop | 25-35 frames |
-| **high** | Energetic, playful | elastic, shake | 30-50 frames |
+Each element can have an enterAnimation and exitAnimation config. These are handled by the rendering system using spring physics:
 
-### 2. Stagger Timing (CRITICAL!)
+| Type | Description | Best For |
+|------|-------------|----------|
+| **spring-scale** | Pop-in with spring physics (THE signature animation) | Most entrances, components, titles |
+| **spring-slide** | Slide with spring overshoot | Text reveals, labels |
+| **spring-bounce** | Bouncy scale with playful feel | CTAs, emphasis, celebrations |
+| **flip** | 3D card flip effect | Dramatic transitions, reveals |
+| **zoom-blur** | Zoom with motion blur | Dramatic entrances/exits |
+| **fade** | Simple opacity transition | Subtle background elements |
+| **slide** | Linear slide (less professional) | Avoid - use spring-slide |
+| **scale** | Basic scale without spring | Avoid - use spring-scale |
 
-**Never animate everything at once!** Use these stagger delays:
+### Spring Presets
+
+Set springPreset on each element for consistent physics:
+
+| Preset | Feel | Use For |
+|--------|------|---------|
+| **smooth** | Controlled, professional (damping: 200) | Default for most animations |
+| **snappy** | Quick, responsive | UI elements, labels |
+| **heavy** | Slow, deliberate | Dramatic reveals, zoom outs |
+| **bouncy** | Playful with overshoot | Celebrations, CTAs, playful tone |
+| **gentle** | Soft, subtle | Background elements |
+
+### Intensity by Animation Type
+
+| Intensity | Enter Animation | Spring Preset | Exit Animation |
+|-----------|-----------------|---------------|----------------|
+| **low** | fade or spring-scale | smooth or gentle | fade |
+| **medium** | spring-scale | smooth | spring-scale |
+| **high** | spring-bounce or zoom-blur | bouncy | spring-scale or zoom-blur |
+
+### Stagger Timing (CRITICAL!)
+
+**Never animate everything at once!** Use staggerDelay on each element:
 
 | Scene Type | Stagger Delay | Example |
 |------------|---------------|---------|
@@ -171,26 +199,19 @@ Label:      y: 0.92, x: 0.5, backgroundColor for visibility
 | Feature | 15-20 frames | Component → Labels → Description |
 | Outro | 10 frames | CTA → Secondary text |
 
-### 3. Easing Rules
+### Visual Hierarchy Order
 
-- **Entrances:** "ease-out" or "spring" - fast start, smooth stop
-- **Exits:** "ease-in" - slow start, fast end
-- **Movements:** "ease-in-out" - smooth both ends
-- **Emphasis:** "spring" - natural bounce
+Animate elements in this order (each with increasing staggerDelay):
+1. Title (staggerDelay: 0) - most important, appears first
+2. Subtitle (staggerDelay: 10-15)
+3. Component/Main content (staggerDelay: 15-25)
+4. Labels/Annotations (staggerDelay: 25-35)
+5. Description (staggerDelay: 30-40)
+6. CTA (staggerDelay: 35-50) - last, most actionable
 
-**NEVER use "linear"** - it looks robotic and amateur!
+### Keyframe Animation Examples (for custom motion)
 
-### 4. Visual Hierarchy Order
-
-Animate elements in this order (each offset by stagger delay):
-1. Title (most important, appears first)
-2. Subtitle
-3. Component/Main content
-4. Labels/Annotations
-5. Description
-6. CTA (last, most actionable)
-
-### 5. Intensity Examples
+Use keyframes for custom animations beyond enter/exit. Frames are RELATIVE to element start:
 
 **Low (Professional/Corporate):**
 \`\`\`
@@ -353,9 +374,10 @@ If component is centered (x: 0.5, y: 0.5) with phone display:
 ## ⚠️ ANTI-PATTERNS (DON'T DO THESE!)
 
 ### Animation Mistakes
-- ❌ **Frame values > 60** for entrance animations (too slow!)
+- ❌ **Using "scale" or "slide"** animation type (use spring-scale or spring-slide instead!)
+- ❌ **Frame values > 60** for keyframe entrance animations (too slow!)
 - ❌ **Linear easing** everywhere (looks robotic)
-- ❌ **All elements animate at once** (overwhelming)
+- ❌ **All elements animate at once** (set staggerDelay on each element!)
 - ❌ **No stagger delays** between elements
 - ❌ **Instant state changes** without interpolation
 
@@ -374,12 +396,13 @@ If component is centered (x: 0.5, y: 0.5) with phone display:
 
 Before generating, verify:
 1. [ ] Title uses fontSize 56-68px, fontWeight 700
-2. [ ] Stagger delays between ALL elements (10-20 frames)
-3. [ ] Easing is "ease-out" or "spring" (not linear!)
-4. [ ] Animation frames are 0-30 for entrances (not 0-300!)
-5. [ ] Text positioned in safe zones (y: 0.05-0.95)
-6. [ ] Component has device frame (phone/laptop)
-7. [ ] White text only on black canvas areas
+2. [ ] Use spring-based animations (spring-scale, spring-slide, spring-bounce)
+3. [ ] Set staggerDelay on ALL elements (10-20 frames apart)
+4. [ ] Use appropriate springPreset (smooth for professional, bouncy for playful)
+5. [ ] Keyframe animation frames are 0-30 for entrances (not 0-300!)
+6. [ ] Text positioned in safe zones (y: 0.05-0.95)
+7. [ ] Component has device frame (phone/laptop)
+8. [ ] White text only on black canvas areas
 
 ## Output Format
 
@@ -417,6 +440,36 @@ const DETAILED_SCENE_TOOL = {
                 easing: { type: Type.STRING, description: 'Easing function' },
               },
               required: ['frame'],
+            },
+          },
+          enterAnimation: {
+            type: Type.OBJECT,
+            description: 'Enter animation config (spring-based)',
+            properties: {
+              type: {
+                type: Type.STRING,
+                enum: ['none', 'fade', 'slide', 'scale', 'spring-scale', 'spring-slide', 'spring-bounce', 'flip', 'zoom-blur'],
+                description: 'Animation type (prefer spring-scale for professional look)',
+              },
+              direction: { type: Type.STRING, enum: ['left', 'right', 'top', 'bottom'] },
+              springPreset: {
+                type: Type.STRING,
+                enum: ['smooth', 'snappy', 'heavy', 'bouncy', 'gentle'],
+                description: 'Spring physics preset (default: smooth)',
+              },
+              staggerDelay: { type: Type.NUMBER, description: 'Frames to delay start for stagger effect' },
+            },
+          },
+          exitAnimation: {
+            type: Type.OBJECT,
+            description: 'Exit animation config',
+            properties: {
+              type: {
+                type: Type.STRING,
+                enum: ['none', 'fade', 'slide', 'scale', 'spring-scale', 'spring-slide', 'spring-bounce', 'flip', 'zoom-blur'],
+              },
+              direction: { type: Type.STRING, enum: ['left', 'right', 'top', 'bottom'] },
+              springPreset: { type: Type.STRING, enum: ['smooth', 'snappy', 'heavy', 'bouncy', 'gentle'] },
             },
           },
         },
@@ -467,6 +520,36 @@ const DETAILED_SCENE_TOOL = {
             letterSpacing: { type: Type.NUMBER },
             lineHeight: { type: Type.NUMBER },
             textAlign: { type: Type.STRING, enum: ['left', 'center', 'right'] },
+            enterAnimation: {
+              type: Type.OBJECT,
+              description: 'Enter animation config (spring-based)',
+              properties: {
+                type: {
+                  type: Type.STRING,
+                  enum: ['none', 'fade', 'slide', 'scale', 'spring-scale', 'spring-slide', 'spring-bounce', 'flip', 'zoom-blur'],
+                  description: 'Animation type (prefer spring-scale for professional look)',
+                },
+                direction: { type: Type.STRING, enum: ['left', 'right', 'top', 'bottom'] },
+                springPreset: {
+                  type: Type.STRING,
+                  enum: ['smooth', 'snappy', 'heavy', 'bouncy', 'gentle'],
+                  description: 'Spring physics preset (default: smooth)',
+                },
+                staggerDelay: { type: Type.NUMBER, description: 'Frames to delay start for stagger effect' },
+              },
+            },
+            exitAnimation: {
+              type: Type.OBJECT,
+              description: 'Exit animation config',
+              properties: {
+                type: {
+                  type: Type.STRING,
+                  enum: ['none', 'fade', 'slide', 'scale', 'spring-scale', 'spring-slide', 'spring-bounce', 'flip', 'zoom-blur'],
+                },
+                direction: { type: Type.STRING, enum: ['left', 'right', 'top', 'bottom'] },
+                springPreset: { type: Type.STRING, enum: ['smooth', 'snappy', 'heavy', 'bouncy', 'gentle'] },
+              },
+            },
           },
           required: ['text', 'role', 'fontSize', 'color', 'position', 'offsetFrames'],
         },
@@ -522,6 +605,84 @@ const DETAILED_SCENE_TOOL = {
             },
           },
           required: ['shapeType', 'width', 'height', 'position', 'offsetFrames'],
+        },
+      },
+
+      // Image elements (logos, icons, screenshots)
+      images: {
+        type: Type.ARRAY,
+        description: 'External images like logos, icons, or screenshots. Use for branding, tool icons, or visual assets.',
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            src: {
+              type: Type.STRING,
+              description: 'Image URL or path. For logos, suggest using the project\'s uploaded assets.',
+            },
+            alt: {
+              type: Type.STRING,
+              description: 'Alt text description for accessibility',
+            },
+            position: {
+              type: Type.OBJECT,
+              properties: {
+                x: { type: Type.NUMBER, description: 'X position 0-1' },
+                y: { type: Type.NUMBER, description: 'Y position 0-1' },
+              },
+              required: ['x', 'y'],
+            },
+            width: { type: Type.NUMBER, description: 'Width as fraction of canvas (0-1)' },
+            height: { type: Type.NUMBER, description: 'Height as fraction of canvas (0-1)' },
+            clipShape: {
+              type: Type.STRING,
+              enum: ['none', 'circle', 'rounded-rect', 'hexagon', 'diamond'],
+              description: 'Clip shape for the image',
+            },
+            offsetFrames: { type: Type.NUMBER, description: 'Frames after scene start' },
+            durationInFrames: { type: Type.NUMBER, description: 'Duration in frames' },
+            keyframes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  frame: { type: Type.NUMBER, description: 'Frame relative to element start' },
+                  opacity: { type: Type.NUMBER, description: 'Opacity 0-1' },
+                  scale: { type: Type.NUMBER, description: 'Scale factor' },
+                  x: { type: Type.NUMBER, description: 'X position 0-1' },
+                  y: { type: Type.NUMBER, description: 'Y position 0-1' },
+                  rotation: { type: Type.NUMBER, description: 'Rotation in degrees' },
+                  easing: { type: Type.STRING, description: 'Easing function' },
+                },
+                required: ['frame'],
+              },
+            },
+            enterAnimation: {
+              type: Type.OBJECT,
+              description: 'Enter animation config',
+              properties: {
+                type: {
+                  type: Type.STRING,
+                  enum: ['none', 'fade', 'spring-scale', 'spring-slide', 'spring-bounce', 'flip', 'zoom-blur'],
+                },
+                direction: { type: Type.STRING, enum: ['left', 'right', 'top', 'bottom'] },
+                springPreset: { type: Type.STRING, enum: ['smooth', 'snappy', 'heavy', 'bouncy', 'gentle'] },
+                staggerDelay: { type: Type.NUMBER, description: 'Frames to delay start for stagger effect' },
+              },
+            },
+            exitAnimation: {
+              type: Type.OBJECT,
+              description: 'Exit animation config',
+              properties: {
+                type: {
+                  type: Type.STRING,
+                  enum: ['none', 'fade', 'spring-scale', 'spring-slide', 'zoom-blur'],
+                },
+                direction: { type: Type.STRING, enum: ['left', 'right', 'top', 'bottom'] },
+                springPreset: { type: Type.STRING, enum: ['smooth', 'snappy', 'heavy', 'bouncy', 'gentle'] },
+              },
+            },
+          },
+          required: ['src', 'position', 'width', 'height', 'offsetFrames'],
         },
       },
 
@@ -631,6 +792,12 @@ ${scene.interactionGoals.map((g, i) => `${i + 1}. ${g}`).join('\n')}` : ''}
 
 ${componentInfo}
 
+${context.availableAssets?.length ? `## Available Assets (Images/Media)
+Use these uploaded images in your scene by referencing their URLs:
+${context.availableAssets.filter(a => a.type === 'image').map(a => `- **${a.name}**: ${a.url}`).join('\n') || 'No images available'}
+
+To add an image, include it in the "images" array with the exact URL from above.
+` : ''}
 ## Composition Dimensions
 - Width: ${context.composition.width}px
 - Height: ${context.composition.height}px
@@ -672,7 +839,7 @@ export async function runScenePlannerAgent(
   const prompt = buildScenePlannerPrompt(scene, videoPlan, context, sceneStartFrame);
 
   const response = await client.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     contents: [
       {
         role: 'user',
@@ -708,6 +875,7 @@ export async function runScenePlannerAgent(
         durationInFrames: scene.durationInFrames,
         texts: (args.texts as SceneText[]) || [],
         shapes: (args.shapes as SceneShape[]) || [],
+        images: (args.images as SceneImage[]) || undefined,
         narrationScript: args.narrationScript as string | undefined,
       };
 
@@ -738,8 +906,9 @@ export async function runScenePlannerAgent(
         detailedScene.cursor = args.cursor as SceneCursor;
       }
 
+      const imageCount = detailedScene.images?.length || 0;
       onProgress?.(
-        `✅ Scene Planner: Completed "${scene.id}" with ${detailedScene.texts.length} texts, ${detailedScene.shapes.length} shapes`
+        `✅ Scene Planner: Completed "${scene.id}" with ${detailedScene.texts.length} texts, ${detailedScene.shapes.length} shapes${imageCount > 0 ? `, ${imageCount} images` : ''}`
       );
 
       return detailedScene;

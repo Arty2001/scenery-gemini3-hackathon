@@ -84,28 +84,23 @@ export function AssetImport({ projectId }: AssetImportProps) {
         const assetType = getAssetType(file.type);
         if (!assetType) continue;
 
-        // Find or create appropriate track
+        // Always create a new track for each uploaded media
         const trackType = assetType === 'image' ? 'image' as const : assetType;
-        let targetTrack = tracks.find((t) => t.type === trackType);
 
-        if (!targetTrack) {
-          const trackName =
-            assetType === 'video'
-              ? 'Video Track'
-              : assetType === 'audio'
-                ? 'Audio Track'
-                : 'Image Track';
-          addTrack({
-            name: trackName,
-            type: trackType,
-            locked: false,
-            visible: true,
-            items: [],
-          });
-          // Get the newly created track (last one added)
-          const currentTracks = useCompositionStore.getState().tracks;
-          targetTrack = currentTracks[currentTracks.length - 1];
-        }
+        // Use filename (without extension) as track name
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+
+        addTrack({
+          name: fileNameWithoutExt,
+          type: trackType,
+          locked: false,
+          visible: true,
+          items: [],
+        });
+
+        // Get the newly created track (last one added)
+        const currentTracks = useCompositionStore.getState().tracks;
+        const targetTrack = currentTracks[currentTracks.length - 1];
 
         // Add item to track based on type
         if (assetType === 'video') {

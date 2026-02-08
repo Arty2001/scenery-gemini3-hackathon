@@ -9,7 +9,7 @@
  * - Keyframe animations (positionX/Y, scale, opacity)
  */
 
-import { AbsoluteFill, OffthreadVideo, Audio, Img, useVideoConfig } from 'remotion';
+import { AbsoluteFill, OffthreadVideo, Audio, Img, useVideoConfig, useCurrentFrame, Freeze } from 'remotion';
 import type { MediaItem, ImageItem } from '@/lib/composition/types';
 import { useItemAnimation } from '@/components/remotion/animation/use-item-animation';
 import { useKeyframeAnimation } from '@/components/remotion/animation/use-keyframe-animation';
@@ -43,9 +43,24 @@ interface MediaItemRendererProps {
 }
 
 export function MediaItemRenderer({ item }: MediaItemRendererProps) {
+  const frame = useCurrentFrame();
   const animStyle = useItemAnimation(item.enterAnimation, item.exitAnimation, item.durationInFrames);
   const kf = useKeyframeAnimation(item.keyframes);
-  const { width: compWidth, height: compHeight } = useVideoConfig();
+  const { width: compWidth, height: compHeight, fps } = useVideoConfig();
+
+  // Freeze frame logic for videos
+  const mediaItem = item.type === 'video' ? (item as MediaItem) : null;
+  const freezeAtEnd = mediaItem?.freezeAtEnd ?? false;
+  const endAt = mediaItem?.endAt;
+  const startFrom = mediaItem?.startFrom ?? 0;
+
+  // Calculate the video duration in timeline frames
+  // If endAt is specified, use it; otherwise video plays normally
+  const videoDurationFrames = endAt ? (endAt - startFrom) : null;
+
+  // Determine if we should freeze (current frame is past video's actual duration)
+  const shouldFreeze = freezeAtEnd && videoDurationFrames && frame >= videoDurationFrames;
+  const freezeFrame = videoDurationFrames ? videoDurationFrames - 1 : 0;
 
   // Guard: skip rendering if src is missing
   if (!item.src) {
@@ -118,18 +133,30 @@ export function MediaItemRenderer({ item }: MediaItemRendererProps) {
         inset: 0,
       };
 
-  // The visual content
+  // The visual content - don't pass endAt when freezing, Freeze handles timing
+  const videoStyle: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'cover' };
+
   const mediaElement = item.type === 'image' ? (
     <Img
       src={item.src}
-      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      style={videoStyle}
     />
+  ) : shouldFreeze ? (
+    // Freeze on the last frame when timeline extends past video duration
+    <Freeze frame={freezeFrame}>
+      <OffthreadVideo
+        src={item.src}
+        volume={0} // Mute when frozen
+        startFrom={startFrom}
+        style={videoStyle}
+      />
+    </Freeze>
   ) : (
     <OffthreadVideo
       src={item.src}
-      volume={(item as MediaItem).volume}
-      startFrom={(item as MediaItem).startFrom}
-      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      volume={mediaItem?.volume ?? 1}
+      startFrom={startFrom}
+      style={videoStyle}
     />
   );
 

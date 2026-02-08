@@ -50,7 +50,7 @@ Analyze the component name, props, and context to determine its UI category.
 Choose the most specific category that applies.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -130,7 +130,7 @@ Requirements:
 - IMPORTANT: For conditionally-rendered components (Modal, Dialog, Drawer, Popover, Tooltip, Sheet, Dropdown, Menu, Alert, Toast), always set open/isOpen/visible/show to true so content renders`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -304,7 +304,7 @@ For cursor targeting in video tutorials, you MUST use semantic HTML:
 Return ONLY the HTML. No markdown, no explanation, no code fences. Just raw HTML starting with <div style="..."> and ending with </div>.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         thinkingConfig: {

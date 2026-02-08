@@ -12,7 +12,7 @@ interface TimelineClipProps {
   track: Track;
   pixelsPerFrame: number;
   isSelected: boolean;
-  onSelect: (itemId: string) => void;
+  onSelect: (itemId: string, addToSelection?: boolean) => void;
 }
 
 const clipColors: Record<string, { bg: string; border: string }> = {
@@ -20,6 +20,11 @@ const clipColors: Record<string, { bg: string; border: string }> = {
   text: { bg: 'bg-green-500/30', border: 'border-green-500/50' },
   video: { bg: 'bg-purple-500/30', border: 'border-purple-500/50' },
   audio: { bg: 'bg-orange-500/30', border: 'border-orange-500/50' },
+  image: { bg: 'bg-pink-500/30', border: 'border-pink-500/50' },
+  shape: { bg: 'bg-yellow-500/30', border: 'border-yellow-500/50' },
+  cursor: { bg: 'bg-cyan-500/30', border: 'border-cyan-500/50' },
+  particles: { bg: 'bg-indigo-500/30', border: 'border-indigo-500/50' },
+  'custom-html': { bg: 'bg-emerald-500/30', border: 'border-emerald-500/50' },
 };
 
 export function TimelineClip({
@@ -72,6 +77,9 @@ export function TimelineClip({
     if (item.type === 'text') {
       return (item as TextItem).text?.slice(0, 20) || 'Text';
     }
+    if (item.type === 'custom-html') {
+      return 'HTML';
+    }
     return item.type.charAt(0).toUpperCase() + item.type.slice(1);
   };
 
@@ -88,7 +96,9 @@ export function TimelineClip({
       style={style}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(item.id);
+        // Ctrl/Cmd+click for multi-select
+        const addToSelection = e.ctrlKey || e.metaKey;
+        onSelect(item.id, addToSelection);
       }}
       {...attributes}
       {...listeners}

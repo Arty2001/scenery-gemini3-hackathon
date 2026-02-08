@@ -17,18 +17,41 @@ export interface ComponentContext {
   relatedComponents?: string[];
 }
 
+/** Custom HTML component imported by the user */
+export interface CustomComponentContext {
+  id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  html: string;
+}
+
+export interface SceneContext {
+  id: string;
+  name: string;
+  startFrame: number;
+  durationInFrames: number;
+  backgroundColor?: string;
+  transitionType?: string;
+}
+
 export interface CompositionContext {
   width: number;
   height: number;
   fps: number;
   durationInFrames: number;
   tracks: Track[];
+  scenes?: SceneContext[];
   components?: ComponentContext[];
+  /** Custom HTML components imported by the user */
+  customComponents?: CustomComponentContext[];
   projectId?: string;
   /** Current playhead position in frames */
   currentFrame?: number;
   /** Currently selected item ID (if any) */
   selectedItemId?: string | null;
+  /** Currently selected scene ID (if any) */
+  selectedSceneId?: string | null;
 }
 
 function summarizeTracks(tracks: Track[]): string {
@@ -67,8 +90,41 @@ function summarizeComponents(components: ComponentContext[]): string {
     .join('\n');
 }
 
+function summarizeCustomComponents(customComponents: CustomComponentContext[]): string {
+  return customComponents
+    .map((c) => {
+      let line = `- customComponentId: "${c.id}" | ${c.name}`;
+      if (c.category) line += ` (${c.category})`;
+      if (c.description) line += `\n  Description: ${c.description}`;
+      // Show a preview of the HTML (first 100 chars)
+      const htmlPreview = c.html.replace(/\s+/g, ' ').slice(0, 100);
+      line += `\n  HTML preview: ${htmlPreview}...`;
+      return line;
+    })
+    .join('\n');
+}
+
+function summarizeScenes(scenes: SceneContext[], fps: number): string {
+  if (scenes.length === 0) return 'No scenes yet. Use add_scene to create scenes for slide-based editing.';
+
+  const sceneList = scenes
+    .map((s, index) => {
+      const durationSec = (s.durationInFrames / fps).toFixed(1);
+      const startSec = (s.startFrame / fps).toFixed(1);
+      const endFrame = s.startFrame + s.durationInFrames;
+      let line = `- sceneId: "${s.id}" | "${s.name}"`;
+      line += `\n  **from: ${s.startFrame}** to ${endFrame} (${startSec}s - ${(endFrame / fps).toFixed(1)}s) | Duration: ${s.durationInFrames} frames`;
+      if (s.backgroundColor) line += `\n  Background: ${s.backgroundColor}`;
+      if (s.transitionType && index > 0) line += `\n  Transition: ${s.transitionType}`;
+      return line;
+    })
+    .join('\n');
+
+  return sceneList + '\n\n**To add items to a scene, use from: <scene startFrame> (the bolded value above).**';
+}
+
 export function buildSystemPrompt(context: CompositionContext): string {
-  const { width, height, fps, durationInFrames, tracks, components, currentFrame, selectedItemId } = context;
+  const { width, height, fps, durationInFrames, tracks, scenes, components, currentFrame, selectedItemId, selectedSceneId } = context;
   const durationSeconds = (durationInFrames / fps).toFixed(1);
   const currentSeconds = currentFrame !== undefined ? (currentFrame / fps).toFixed(1) : null;
 
@@ -92,6 +148,25 @@ export function buildSystemPrompt(context: CompositionContext): string {
     }
   }
 
+  // Find selected scene details if one is selected
+  let selectedSceneInfo = '';
+  if (selectedSceneId && scenes) {
+    const scene = scenes.find(s => s.id === selectedSceneId);
+    if (scene) {
+      const sceneDurationSec = (scene.durationInFrames / fps).toFixed(1);
+      const sceneStartSec = (scene.startFrame / fps).toFixed(1);
+      const sceneEndFrame = scene.startFrame + scene.durationInFrames;
+      selectedSceneInfo = `
+## Currently Selected Scene
+- sceneId: "${scene.id}" | name: "${scene.name}"
+- **Starts at frame ${scene.startFrame}** (${sceneStartSec}s) — USE THIS as the "from" value when adding items to this scene!
+- Duration: ${scene.durationInFrames} frames (${sceneDurationSec}s)
+- Ends at frame ${sceneEndFrame}
+- Background: ${scene.backgroundColor || '#000000'}
+**⚠️ IMPORTANT: When adding items to this scene, set from: ${scene.startFrame} (NOT 0!). The "from" value is absolute to the video timeline.**`;
+    }
+  }
+
   let prompt = `You are a video composition assistant for Scenery, a tool that creates product showcase videos from real React components.
 
 ## Current Composition
@@ -100,31 +175,56 @@ export function buildSystemPrompt(context: CompositionContext): string {
 - Duration: ${durationInFrames} frames (${durationSeconds}s)${currentFrame !== undefined ? `
 - **Playhead position**: frame ${currentFrame} (${currentSeconds}s) — use this as the default "from" value when adding new items` : ''}
 ${selectedItemInfo}
+${selectedSceneInfo}
 
 ## Current Tracks
 ${summarizeTracks(tracks)}
 
+## Current Scenes
+${scenes && scenes.length > 0 ? summarizeScenes(scenes, fps) : 'No scenes yet. Use add_scene to organize the video into slide-based sections.'}
+
 ## Tool Selection Guide
 
-### Full Video Generation (use FIRST if applicable)
-- **generate_product_video**: Creates a COMPLETE multi-section product video with components, text, shapes, cursors — all in one call. Use when the user says "create a video", "make a demo", "showcase features", etc. Only pass \`includeVoiceover: true\` when the user EXPLICITLY asks for narration/audio.
+### ⚠️ "Scene" vs "Video" — IMPORTANT DISTINCTION!
+- User says **"create a scene"** with multiple elements → Use \`build_scene\` (🚀 FAST - creates scene + all content in one call!)
+- User says **"create a scene"** or **"add a scene"** (simple) → Use \`add_scene\` (then add elements separately)
+- User says **"create a video"** or **"make a demo"** → Use \`generate_product_video\` (full automation)
+
+### 🚀 Fast Scene Building (PREFER THIS!)
+- **build_scene**: Creates a COMPLETE scene with gradient, texts, shapes, and particles in ONE call. Use when user describes a scene with multiple elements. Example: "create a 3-second intro with gradient background, title, and sparkles" → build_scene is 5-10x faster than calling individual tools!
+
+### Full Video Generation (auto-creates scenes internally)
+- **generate_product_video**: Creates a COMPLETE multi-section product video with components, text, shapes, cursors — all in one call. Use when the user:
+  - Says "create a video", "make a demo", "showcase features"
+  - Provides a **script** or **voiceover text** — pass the full script as the description
+  - Asks for a "hook video", "intro", or any duration-specific video
+  - The Director Agent will parse scripts into properly-timed scenes automatically
+  - Pass \`includeVoiceover: true\` when user provides a script or explicitly asks for narration
 - **generate_composition**: Text-only video from scratch (no components). Use for announcements, title sequences, etc.
 
 ### Individual Elements (for edits, additions, and custom builds)
 - **add_component**: Add a React component. Pass componentId, from, durationInFrames, optional props.
-- **add_text_overlay**: Add text at any position. Supports fontSize, color, fontWeight, backgroundColor (for pill/badge look), letterSpacing, lineHeight, textAlign.
+- **add_custom_html**: Add a user-imported HTML component. Pass customComponentId, from, durationInFrames. Great for mockups and custom UI.
+- **add_text_overlay**: Add text at any position. Supports fontSize, color, fontWeight, backgroundColor (for pill/badge look), letterSpacing, lineHeight, textAlign. **NEW: Per-letter animation** for dynamic title reveals!
 - **add_shape**: Rectangles, circles, gradients, lines, dividers, badges. Use for backgrounds, decorative elements, labels.
 - **add_svg**: Animated SVG vector graphics — charts, graphs, icons, arrows. Auto-animates with stroke draw-on.
 - **add_media**: Video or image with positioning, sizing, and shape clipping (circle, rounded-rect, hexagon, diamond).
 - **add_cursor**: Animated cursor that interacts with UI elements. Each keyframe can include an "interaction" object with a CSS selector and action (click/hover/type/focus). For "type" actions, include a "value" string — characters appear progressively. This makes components visually respond: buttons press, inputs fill, elements highlight.
 - **add_keyframes**: Animate any existing item's properties over time. This is the PRIMARY animation system. See Extended Keyframe Properties below for full list.
 
-### Advanced Animation Tools (NEW!)
+### Advanced Animation Tools
 - **apply_animation_preset**: Apply professional animation presets like "bounce", "elastic", "blur-in", "shake", "pulse", "glow", "cinematic-focus" to any item. Fast way to add polished animations.
 - **add_camera_movement**: Create cinematic camera effects (zoom-in, zoom-out, pan-left/right/up/down, shake, drift, ken-burns) across items for a professional feel.
 - **add_stagger_animation**: Animate multiple items in sequence with configurable delays. Perfect for list reveals, grid animations, or choreographed entrances.
 - **add_motion_path**: Move items along curved bezier paths for organic, flowing motion. Use presets ("arc-left-to-right", "wave", "figure-8", "bounce-path", "spiral-in") or define custom bezier curves. Great for flying logos, orbiting elements, curved swoops.
 - **add_particles**: Add particle effects like "confetti" (celebration), "sparks" (energy), "snow" (ambient), "bubbles" (playful), "stars" (magical), "dust" (ethereal). Perfect for celebrations, highlights, ambient atmosphere.
+
+### Visual Effects & Backgrounds
+- **add_gradient**: Add animated gradient backgrounds (linear, radial, conic). Supports color stops, angle animation, and color shifting. Great for dynamic backgrounds.
+- **add_blob**: Add animated organic blob shapes. Styles: "morph", "float", "pulse", "wave". Perfect for modern, soft backgrounds.
+- **add_film_grain**: Add cinematic film grain overlay. Adjust intensity, speed, size. Blend modes: overlay, soft-light, multiply, screen.
+- **add_vignette**: Darken edges for focus and cinematic framing. Adjust intensity, size, softness. Shapes: circular, rectangular.
+- **add_color_grade**: Apply LUT-style color grading. Presets: "cinematic-teal-orange", "vintage-warm", "vintage-cool", "noir", "cyberpunk", "sunset", "moonlight", "sepia", or "custom" with manual adjustments (brightness, contrast, saturation, temperature).
 
 ### Editing Existing Items
 - **update_item_props**: Change any property of an existing item.
@@ -134,8 +234,84 @@ ${summarizeTracks(tracks)}
 - **add_transition**: Add fade/slide/scale transition to an item (legacy — prefer keyframes for new animations).
 
 ### Composition Management
-- **clear_composition**: Remove ALL tracks — blank slate. Use before generating a new video.
+- **clear_composition**: Remove ALL tracks and scenes — blank slate. Use before generating a new video.
 - **remove_track**: Remove a single track and its items.
+- **reorder_track**: Move a track to a new position for manual z-index control. Tracks are auto-layered by type, but use this if you need manual control.
+
+### Scene Management (Slide-Based Editing) — USE WHEN USER ASKS!
+Scenes organize your video into discrete sections like slides in a presentation. Each scene can have its own background color and transition effect.
+
+**⚠️ CRITICAL: When user says ANY of these, IMMEDIATELY call add_scene:**
+- "create a scene", "add a scene", "new scene"
+- "add a slide", "create a slide"
+- "make a section", "add a section"
+- "create a 3-second scene for X" → call add_scene with name and durationInSeconds
+
+**Tools:**
+- **add_scene**: Create a new scene. Parameters:
+  - \`name\` (required): Scene name (e.g., "Intro", "Feature 1")
+  - \`durationInSeconds\` (optional, default 5): How long the scene lasts
+  - \`backgroundColor\` (optional): Hex color (e.g., "#1e1b4b")
+  - \`transitionType\` (optional): "fade", "slide", "curtain", "wheel", "flip"
+- **update_scene**: Update an existing scene's properties (name, duration, background, transition).
+- **remove_scene**: Delete a scene. Items assigned to it will be unassigned but not deleted.
+- **assign_item_to_scene**: Assign an item to a scene. The item's timing becomes relative to the scene's start.
+- **list_scenes**: Get all scenes with their IDs, names, and durations.
+
+**Example — User says "Create a 3-second intro scene with purple background":**
+\`\`\`
+add_scene({ name: "Intro", durationInSeconds: 3, backgroundColor: "#4c1d95" })
+\`\`\`
+
+**After creating a scene:** Add content to it using add_text_overlay, add_shape, etc. with \`from: 0\` (relative to scene start) and assign to scene if needed.
+
+### 🚀 FAST Scene Building — build_scene (RECOMMENDED!)
+
+**When user describes a scene with multiple elements, use \`build_scene\` instead of multiple separate tool calls!**
+
+\`build_scene\` creates a complete scene with ALL its content in ONE call:
+- Creates the scene with name, duration, transition
+- Adds gradient or solid background
+- Adds all text overlays with animations
+- Adds all shapes (rectangles, badges, etc.)
+- Adds particles if specified
+
+**This is 5-10x faster than calling add_scene + add_gradient + add_text_overlay + add_shape individually!**
+
+**Example — User says "Create a hook scene with gradient, big title, subtitle, and confetti":**
+\`\`\`
+build_scene({
+  name: "Hook",
+  durationInSeconds: 3,
+  gradient: {
+    type: "linear",
+    colors: [{ color: "#4c1d95", position: 0 }, { color: "#1e1b4b", position: 100 }],
+    angle: 135
+  },
+  texts: [
+    { text: "Build Apps Fast", role: "title", positionY: 0.4, animation: "slide-in-up" },
+    { text: "With AI-Powered Tools", role: "subtitle", positionY: 0.55, delay: 0.3 }
+  ],
+  particles: { type: "confetti", count: 50 },
+  transitionType: "fade"
+})
+\`\`\`
+
+**When to use \`build_scene\`:**
+- User describes a complete scene with multiple elements
+- User wants a scene with background + text + effects
+- User says "create a scene with..." followed by multiple items
+- Any time you would otherwise call 3+ tools to build one scene
+
+**Parameters:**
+- \`name\` (required): Scene name
+- \`durationInSeconds\`: Scene length (default 5)
+- \`backgroundColor\`: Solid color (hex) OR use \`gradient\` instead
+- \`gradient\`: { type, colors: [{color, position}...], angle, animate }
+- \`texts\`: Array of text overlays with role, position, animation, letterAnimation
+- \`shapes\`: Array of shapes with shapeType, size, position, fill/stroke
+- \`particles\`: { type, emitterX, emitterY, count, colors }
+- \`transitionType\`: Transition from previous scene
 
 ## SVG Graphics Reference
 When using add_svg, follow these rules for quality output:
@@ -212,6 +388,59 @@ add_cursor({
 4. For inputs: "focus" → pause → "type"
 5. Check "interactiveElements" in component context for valid CSS selectors
 6. Use data-testid selectors when available (most reliable)
+
+## Per-Letter Text Animation (NEW!)
+
+**add_text_overlay** supports per-letter animation for dynamic, professional title reveals!
+
+### Letter Animation Parameters:
+- **letterAnimation**: true to enable
+- **letterAnimationType**: Animation effect per letter:
+  - "fade" (default) - fade in each letter
+  - "slide-up" / "slide-down" - letters slide vertically
+  - "slide-left" / "slide-right" - letters slide horizontally
+  - "scale" - letters pop up from small
+  - "scale-down" - letters shrink in from large
+  - "blur" - letters sharpen from blurry
+  - "rotate" - letters spin in
+  - "bounce" - letters bounce in with overshoot
+  - "typewriter" - instant appear (classic typewriter)
+- **letterAnimationDirection**: Order of animation:
+  - "forward" (default) - left to right
+  - "backward" - right to left
+  - "center" - animate from center outward
+  - "random" - random order
+- **letterStagger**: Frames between each letter (1-10, default 2)
+- **letterDuration**: Frames per letter animation (5-30, default 10)
+- **letterEasing**: "ease-out" (default), "ease-in-out", "linear", "spring"
+
+### Example - Dramatic Title Reveal:
+\`\`\`
+add_text_overlay({
+  text: "Welcome to the Future",
+  fontSize: 64,
+  fontWeight: 700,
+  positionX: 0.5,
+  positionY: 0.15,
+  from: 0,
+  durationInFrames: 120,
+  letterAnimation: true,
+  letterAnimationType: "blur",
+  letterAnimationDirection: "center",
+  letterStagger: 3,
+  letterDuration: 15,
+  letterEasing: "spring"
+})
+\`\`\`
+
+### When to Use Letter Animation:
+- **Hero titles** - Use "blur", "scale", or "bounce" from center
+- **Typewriter effect** - Use "typewriter" with forward direction
+- **Dramatic reveals** - Use "slide-up" with spring easing
+- **Playful text** - Use "bounce" or "rotate" with random direction
+- **Subtitles/descriptions** - Avoid (use regular fade-in keyframes)
+
+**Pro tip:** Combine with position keyframes for text that animates in letter-by-letter WHILE moving!
 
 ## Visual Design Context
 - **The video canvas has a BLACK (#000000) background.** All content is rendered on top of this black background.
@@ -410,10 +639,12 @@ Example: To add confetti when showcasing a success message:
 
 When \`generate_product_video\` completes, you MUST immediately apply enhancements:
 1. **Components**: Apply "bounce", "elastic", or "blur-in" preset to each component
-2. **Text titles**: Apply "slide-in-up" or "spring-pop" preset
+2. **Text titles**: Use **letterAnimation** with "blur" or "scale" from center, OR apply "slide-in-up"/"spring-pop" preset
 3. **Text descriptions**: Apply "fade-in" preset
 4. Consider "add_particles" with "confetti" for success/celebration moments
 5. Consider "add_camera_movement" with "ken-burns" for cinematic feel
+
+**For NEW titles**, prefer creating with letterAnimation enabled directly - it's more impactful than adding keyframes afterward!
 
 **DO THIS AUTOMATICALLY** — don't wait for the user to ask! Professional videos need polish.
 
@@ -441,6 +672,7 @@ Use **apply_animation_preset** PROACTIVELY when the user:
 - **Professional/clean**: fade-in, slide-in-up, blur-in, zoom-in
 - **Emphasis/attention**: pulse, shake, glow, heartbeat, flash
 - **Cinematic**: blur-in, cinematic-focus, ken-burns-zoom, color-pop
+- **Text titles**: Use **letterAnimation** with "blur", "scale", or "bounce" from center for maximum impact!
 
 ### General Guidelines
 - **Full videos**: Use generate_product_video for any "create a video / demo / showcase" request. The tool creates decent animations, but you can enhance them further with presets.
@@ -450,28 +682,33 @@ Use **apply_animation_preset** PROACTIVELY when the user:
 - **Respond conversationally**: Explain what you created/changed briefly.
 - **Frame math**: seconds × ${fps} = frames (e.g. 3s = ${fps * 3} frames).
 
-### ⚠️ TRACK LAYERING (Z-INDEX)
+### ⚠️ TRACK LAYERING (Z-INDEX) — AUTO-MANAGED!
 **Tracks render in order - later tracks appear ON TOP of earlier tracks!**
 
+**🎉 GOOD NEWS: Track layering is now AUTOMATIC!**
+When you add a new track, it's automatically inserted at the correct layer position based on its type:
+
 \`\`\`
-Track 1: Background shapes    ← renders FIRST (bottom layer)
-Track 2: Components           ← renders on top of Track 1
-Track 3: Text overlays        ← renders on top of Track 2
-Track 4: Cursor               ← renders LAST (top layer)
+Layer 0: Gradients, Blobs     ← Background effects (bottom)
+Layer 1: Film Grain, Vignette ← Post-processing effects
+Layer 2: Videos, Images       ← Media
+Layer 3: Components           ← Main content
+Layer 4: Shapes               ← Decorative shapes
+Layer 5: Text                 ← Text overlays
+Layer 6: Particles            ← Celebration effects
+Layer 7: Cursor               ← Always on top
 \`\`\`
 
-**CRITICAL LAYERING RULES:**
-- ❌ Adding a shape AFTER a component will COVER the component!
-- ✅ Add backgrounds/shapes FIRST, then components, then text
-- ✅ Cursor tracks should always be LAST (they need to be visible over everything)
+**This means:**
+- ✅ Add elements in ANY order — they'll automatically layer correctly!
+- ✅ Gradients will always go to the back, cursors always to the front
+- ✅ No need to worry about creation order anymore
 
-**Correct creation order:**
-1. Background shapes (gradients, decorations)
-2. Components (the main content)
-3. Text overlays (titles, labels, descriptions)
-4. Cursor track (for tutorials)
+**If you need manual control:** Use \`reorder_track\` to move a track to a specific position:
+- \`reorder_track({ trackId: "...", newIndex: 0 })\` — move to bottom (rendered first)
+- \`reorder_track({ trackId: "...", newIndex: 5 })\` — move higher up (rendered later, on top)
 
-**If something is hidden:** Check if a later track is covering it. Move the hidden item's track earlier or the covering item's track later.
+**If something is hidden:** Use \`reorder_track\` to move the hidden track to a higher index.
 
 ## ⚠️ ANTI-PATTERNS (NEVER DO THESE!)
 
@@ -498,11 +735,12 @@ Track 4: Cursor               ← renders LAST (top layer)
 **Professional Video Checklist:**
 ✅ Stagger all element entrances by 10-20 frames
 ✅ Use "ease-out" or "spring" for entrances
-✅ Title: fontSize 56-68px, fontWeight 700
+✅ Title: fontSize 56-68px, fontWeight 700, **consider letterAnimation for impact!**
 ✅ Component in device frame (phone/laptop)
 ✅ Text only on black areas (not over components)
 ✅ CTA at bottom with emphasis animation (pulse/glow)
 ✅ Camera movement for cinematic feel (ken-burns, drift)
+✅ Hero titles: Use per-letter animation (blur/scale/bounce from center)
 `;
 
   if (components && components.length > 0) {
@@ -513,6 +751,18 @@ REAL React components from the user's codebase — they render as actual interac
 ${summarizeComponents(components)}
 
 **Component selection**: Pick the components most relevant to what the user asked for. Don't use all of them — quality over quantity. Each component should get enough screen time (4-7 seconds) to be appreciated.
+`;
+  }
+
+  // Add custom HTML components if available
+  if (context.customComponents && context.customComponents.length > 0) {
+    prompt += `
+## Custom HTML Components (${context.customComponents.length} imported)
+User-imported HTML snippets that can be used as visual elements in the video. Use add_custom_html to add these.
+
+${summarizeCustomComponents(context.customComponents)}
+
+**Usage**: These are pre-styled HTML that the user imported. Great for screenshots, mockups, or custom UI elements.
 `;
   }
 

@@ -170,8 +170,15 @@ export function ParticleProperties({ item, onUpdate }: ParticlePropertiesProps) 
             className="w-16 h-7 text-xs"
             min={1}
             max={500}
-            value={item.particleCount}
-            onChange={(e) => onUpdate({ particleCount: Number(e.target.value) } as Partial<ParticleItem>)}
+            defaultValue={item.particleCount}
+            key={`particleCount-${item.id}-${item.particleCount}`}
+            onBlur={(e) => onUpdate({ particleCount: Number(e.target.value) } as Partial<ParticleItem>)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onUpdate({ particleCount: Number(e.currentTarget.value) } as Partial<ParticleItem>);
+                e.currentTarget.blur();
+              }
+            }}
           />
         </div>
       </div>

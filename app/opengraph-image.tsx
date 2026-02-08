@@ -9,7 +9,23 @@ export const size = {
 };
 export const contentType = 'image/png';
 
+// Helper to convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 export default async function Image() {
+  // Fetch the logo from public folder and convert to base64
+  const logoBuffer = await fetch(
+    new URL('../public/scenery-logo.png', import.meta.url)
+  ).then((res) => res.arrayBuffer());
+  const logoBase64 = `data:image/png;base64,${arrayBufferToBase64(logoBuffer)}`;
+
   return new ImageResponse(
     (
       <div
@@ -63,53 +79,20 @@ export default async function Image() {
             padding: '40px',
           }}
         >
-          {/* Logo/Icon */}
-          <div
+          {/* Logo */}
+          <img
+            src={logoBase64}
+            width={280}
+            height={280}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 80,
-              height: 80,
-              borderRadius: 20,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               marginBottom: 30,
             }}
-          >
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polygon points="23 7 16 12 23 17 23 7" />
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            </svg>
-          </div>
-
-          {/* Title */}
-          <div
-            style={{
-              fontSize: 72,
-              fontWeight: 800,
-              background: 'linear-gradient(135deg, #fff 0%, #a0a0a0 100%)',
-              backgroundClip: 'text',
-              color: 'transparent',
-              marginBottom: 20,
-              letterSpacing: '-2px',
-            }}
-          >
-            Scenery
-          </div>
+          />
 
           {/* Subtitle */}
           <div
             style={{
-              fontSize: 32,
+              fontSize: 28,
               color: '#888',
               marginBottom: 40,
               maxWidth: 800,

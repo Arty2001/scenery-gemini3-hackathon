@@ -4,9 +4,12 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
-import type { PropertyKeyframe, EasingType, TimelineItem } from '@/lib/composition/types';
+import { Plus, Trash2, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
+import type { PropertyKeyframe, EasingType, TimelineItem, SpringPreset, SpringConfig } from '@/lib/composition/types';
+import { SPRING_PRESET_INFO, SPRING_PRESETS, DEFAULT_SPRING_CONFIG } from '@/lib/spring-presets';
 
 // =============================================
 // Types
@@ -205,8 +208,23 @@ export function AnimationControls({
                       type="number"
                       min={0}
                       max={durationInFrames - 1}
-                      value={kf.frame}
-                      onChange={(e) => updateKeyframe(index, { frame: Math.max(0, Math.min(durationInFrames - 1, parseInt(e.target.value) || 0)) })}
+                      defaultValue={kf.frame}
+                      key={`frame-${kf.frame}-${index}`}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val)) {
+                          updateKeyframe(index, { frame: Math.max(0, Math.min(durationInFrames - 1, val)) });
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = parseInt(e.currentTarget.value);
+                          if (!isNaN(val)) {
+                            updateKeyframe(index, { frame: Math.max(0, Math.min(durationInFrames - 1, val)) });
+                          }
+                          e.currentTarget.blur();
+                        }
+                      }}
                       className="h-7 text-xs"
                     />
                   </div>
@@ -214,7 +232,16 @@ export function AnimationControls({
                     <Label className="text-[10px] text-muted-foreground">Easing</Label>
                     <select
                       value={kf.easing ?? 'ease-out'}
-                      onChange={(e) => updateKeyframe(index, { easing: e.target.value as EasingType })}
+                      onChange={(e) => {
+                        const easing = e.target.value as EasingType;
+                        // Clear spring config when switching away from spring
+                        if (easing !== 'spring') {
+                          updateKeyframe(index, { easing, springPreset: undefined, springConfig: undefined });
+                        } else {
+                          // Default to 'smooth' preset when selecting spring
+                          updateKeyframe(index, { easing, springPreset: 'smooth' });
+                        }
+                      }}
                       className="w-full h-7 rounded-md border border-input bg-background px-2 text-xs"
                     >
                       {EASING_OPTIONS.map((e) => (
@@ -223,6 +250,15 @@ export function AnimationControls({
                     </select>
                   </div>
                 </div>
+
+                {/* Spring Physics Controls (shown when easing is 'spring') */}
+                {kf.easing === 'spring' && (
+                  <SpringPhysicsControls
+                    springPreset={kf.springPreset}
+                    springConfig={kf.springConfig}
+                    onChange={(preset, config) => updateKeyframe(index, { springPreset: preset, springConfig: config })}
+                  />
+                )}
 
                 {/* Property values */}
                 {propEntries.map(([prop, val]) => {
@@ -235,8 +271,23 @@ export function AnimationControls({
                         min={def?.min}
                         max={def?.max}
                         step={def?.step ?? 0.01}
-                        value={val}
-                        onChange={(e) => updateValue(index, prop, parseFloat(e.target.value) || 0)}
+                        defaultValue={val}
+                        key={`${prop}-${val}-${index}`}
+                        onBlur={(e) => {
+                          const parsed = parseFloat(e.target.value);
+                          if (!isNaN(parsed)) {
+                            updateValue(index, prop, parsed);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const parsed = parseFloat(e.currentTarget.value);
+                            if (!isNaN(parsed)) {
+                              updateValue(index, prop, parsed);
+                            }
+                            e.currentTarget.blur();
+                          }
+                        }}
                         className="h-7 text-xs flex-1"
                       />
                       <Button
@@ -252,26 +303,61 @@ export function AnimationControls({
                 })}
 
                 {/* Add property */}
-                <div className="flex items-center gap-1 pt-1">
-                  <select
-                    value={addProp}
-                    onChange={(e) => setAddProp(e.target.value)}
-                    className="h-7 rounded-md border border-input bg-background px-2 text-xs flex-1"
-                  >
-                    {ANIMATABLE_PROPERTIES.filter((p) => !(p.value in kf.values)).map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs px-2"
-                    onClick={() => addPropertyToKeyframe(index)}
-                    disabled={ANIMATABLE_PROPERTIES.filter((p) => !(p.value in kf.values)).length === 0}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
+                {(() => {
+                  const availableProps = ANIMATABLE_PROPERTIES.filter((p) => !(p.value in kf.values));
+                  // Use first available prop if current selection is not available
+                  const effectiveAddProp = availableProps.find((p) => p.value === addProp)
+                    ? addProp
+                    : availableProps[0]?.value ?? '';
+                  return (
+                    <div className="flex items-center gap-1 pt-1">
+                      <select
+                        value={effectiveAddProp}
+                        onChange={(e) => setAddProp(e.target.value)}
+                        className="h-7 rounded-md border border-input bg-background px-2 text-xs flex-1"
+                      >
+                        {availableProps.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs px-2"
+                        onClick={() => {
+                          if (effectiveAddProp) {
+                            const propDef = ANIMATABLE_PROPERTIES.find((p) => p.value === effectiveAddProp);
+                            const getDefaultValue = (prop: string): number => {
+                              switch (prop) {
+                                case 'positionX':
+                                case 'positionY':
+                                  return 0.5;
+                                case 'scale':
+                                case 'opacity':
+                                case 'brightness':
+                                case 'contrast':
+                                case 'saturate':
+                                  return 1;
+                                case 'shadowOpacity':
+                                  return 0.5;
+                                case 'shadowBlur':
+                                  return 10;
+                                case 'shadowOffsetY':
+                                  return 4;
+                                default:
+                                  return 0;
+                              }
+                            };
+                            updateKeyframe(index, { values: { ...kf.values, [effectiveAddProp]: getDefaultValue(effectiveAddProp) } });
+                          }
+                        }}
+                        disabled={availableProps.length === 0}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                })()}
 
                 {/* Delete keyframe */}
                 <Button
@@ -288,6 +374,148 @@ export function AnimationControls({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// =============================================
+// Spring Physics Controls
+// =============================================
+
+interface SpringPhysicsControlsProps {
+  springPreset?: SpringPreset;
+  springConfig?: SpringConfig;
+  onChange: (preset?: SpringPreset, config?: SpringConfig) => void;
+}
+
+function SpringPhysicsControls({ springPreset, springConfig, onChange }: SpringPhysicsControlsProps) {
+  const [showCustom, setShowCustom] = useState(!!springConfig);
+
+  // Get current effective config (custom or from preset)
+  const currentConfig = springConfig ?? (springPreset ? SPRING_PRESETS[springPreset] : DEFAULT_SPRING_CONFIG);
+
+  const handlePresetChange = (preset: SpringPreset) => {
+    if (showCustom) {
+      // When in custom mode, update config to match preset
+      onChange(undefined, SPRING_PRESETS[preset]);
+    } else {
+      onChange(preset, undefined);
+    }
+  };
+
+  const handleCustomToggle = (checked: boolean) => {
+    setShowCustom(checked);
+    if (checked) {
+      // Switch to custom mode with current preset values
+      onChange(undefined, currentConfig);
+    } else {
+      // Switch back to preset mode
+      onChange(springPreset ?? 'smooth', undefined);
+    }
+  };
+
+  const handleConfigChange = (key: keyof SpringConfig, value: number) => {
+    const newConfig = { ...currentConfig, [key]: value };
+    onChange(undefined, newConfig);
+  };
+
+  return (
+    <div className="space-y-2 pt-1 border-t border-dashed">
+      <div className="flex items-center justify-between">
+        <Label className="text-[10px] text-muted-foreground font-medium">Spring Physics</Label>
+        <div className="flex items-center gap-1">
+          <Checkbox
+            id="custom-spring"
+            checked={showCustom}
+            onCheckedChange={(checked) => handleCustomToggle(checked === true)}
+            className="h-3 w-3"
+          />
+          <Label htmlFor="custom-spring" className="text-[10px] text-muted-foreground cursor-pointer">
+            Custom
+          </Label>
+        </div>
+      </div>
+
+      {/* Preset selector */}
+      {!showCustom && (
+        <div className="grid grid-cols-3 gap-1">
+          {SPRING_PRESET_INFO.map((preset) => (
+            <button
+              key={preset.name}
+              onClick={() => handlePresetChange(preset.name)}
+              className={cn(
+                "px-2 py-1.5 rounded text-[10px] text-center border transition-colors",
+                springPreset === preset.name
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background hover:bg-muted border-input"
+              )}
+              title={preset.description}
+            >
+              <span className="mr-0.5">{preset.icon}</span>
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Custom spring parameters */}
+      {showCustom && (
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-muted-foreground">Mass</Label>
+              <span className="text-[10px] text-muted-foreground">{currentConfig.mass.toFixed(1)}</span>
+            </div>
+            <Slider
+              value={[currentConfig.mass]}
+              min={0.1}
+              max={10}
+              step={0.1}
+              onValueChange={([v]) => handleConfigChange('mass', v)}
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-muted-foreground">Stiffness</Label>
+              <span className="text-[10px] text-muted-foreground">{currentConfig.stiffness}</span>
+            </div>
+            <Slider
+              value={[currentConfig.stiffness]}
+              min={1}
+              max={1000}
+              step={1}
+              onValueChange={([v]) => handleConfigChange('stiffness', v)}
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-muted-foreground">Damping</Label>
+              <span className="text-[10px] text-muted-foreground">{currentConfig.damping}</span>
+            </div>
+            <Slider
+              value={[currentConfig.damping]}
+              min={1}
+              max={500}
+              step={1}
+              onValueChange={([v]) => handleConfigChange('damping', v)}
+            />
+          </div>
+
+          {/* Quick presets for reference */}
+          <div className="flex flex-wrap gap-1 pt-1">
+            {SPRING_PRESET_INFO.slice(0, 4).map((preset) => (
+              <button
+                key={preset.name}
+                onClick={() => onChange(undefined, SPRING_PRESETS[preset.name])}
+                className="text-[9px] px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground"
+                title={`Apply ${preset.label} values`}
+              >
+                {preset.icon} {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

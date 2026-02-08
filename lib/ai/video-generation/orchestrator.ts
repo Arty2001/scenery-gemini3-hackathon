@@ -32,6 +32,7 @@ import type {
   DetailedScene,
   GeneratedComposition,
   ProgressCallback,
+  AvailableAsset,
 } from './types';
 import type { RefinementResult } from './refinement-agent';
 
@@ -56,6 +57,9 @@ export interface VideoGenerationRequest {
 
   /** Project ID for storage */
   projectId?: string;
+
+  /** Available uploaded assets for AI to use */
+  availableAssets?: AvailableAsset[];
 
   /** Minimum quality score (0-100) */
   minQualityScore?: number;
@@ -120,6 +124,7 @@ export async function generateVideo(
     voiceName: request.voiceName,
     targetDurationSeconds: request.targetDurationSeconds,
     projectId: request.projectId,
+    availableAssets: request.availableAssets,
   };
 
   try {

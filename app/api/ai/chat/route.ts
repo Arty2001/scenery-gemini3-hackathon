@@ -3,7 +3,8 @@ import { getAIClient } from '@/lib/ai/client';
 import { buildSystemPrompt, type CompositionContext } from '@/lib/ai/system-prompt';
 import { compositionTools } from '@/lib/ai/composition-tools';
 import { Type } from '@google/genai';
-import { generateVideo, type ComponentInfo } from '@/lib/ai/video-generation';
+import { generateVideo, type ComponentInfo, type AvailableAsset } from '@/lib/ai/video-generation';
+import { listProjectAssets } from '@/lib/actions/assets';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     const systemPrompt = buildSystemPrompt(compositionContext);
 
     const stream = await ai.models.generateContentStream({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: messages,
       config: {
         systemInstruction: systemPrompt,
@@ -117,13 +118,35 @@ export async function POST(request: NextRequest) {
                 const includeVoiceover = (genArgs.includeVoiceover as boolean) ?? false;
                 const voiceName = (genArgs.voiceName as string) ?? 'Kore';
                 const rawDuration = (genArgs.durationInSeconds as number) ?? 30;
-                const durationInSeconds = Math.max(30, rawDuration);
+                const durationInSeconds = Math.max(10, rawDuration); // Allow shorter hook videos (min 10s)
 
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({ type: 'text', content: '🎬 Starting multi-agent video generation...\n' })}\n\n`
                   )
                 );
+
+                // Fetch available project assets for AI to reference
+                let availableAssets: AvailableAsset[] = [];
+                if (compositionContext.projectId) {
+                  try {
+                    const assets = await listProjectAssets(compositionContext.projectId);
+                    availableAssets = assets.map((a) => ({
+                      name: a.name,
+                      url: a.url,
+                      type: a.type,
+                    }));
+                    if (availableAssets.length > 0) {
+                      controller.enqueue(
+                        encoder.encode(
+                          `data: ${JSON.stringify({ type: 'text', content: `📁 Found ${availableAssets.length} uploaded assets to use.\n` })}\n\n`
+                        )
+                      );
+                    }
+                  } catch (err) {
+                    console.warn('Failed to list project assets:', err);
+                  }
+                }
 
                 // Build component info for the multi-agent system
                 const componentInfo: ComponentInfo[] = (compositionContext.components ?? []).map((c) => ({
@@ -156,6 +179,7 @@ export async function POST(request: NextRequest) {
                       voiceName,
                       targetDurationSeconds: durationInSeconds,
                       projectId: compositionContext.projectId,
+                      availableAssets,
                       minQualityScore: 90,
                       maxRefinementIterations: 5,
                     },
@@ -169,6 +193,27 @@ export async function POST(request: NextRequest) {
                   );
 
                   if (result.success && result.tracks) {
+                    // Convert DetailedScene[] to editor Scene[] format
+                    const scenes = result.scenes?.map((detailedScene, index) => {
+                      const sceneOutline = result.videoPlan?.scenes.find(s => s.id === detailedScene.sceneId);
+                      const sceneName = sceneOutline?.purpose || `Scene ${index + 1}`;
+
+                      // Add transitions to all scenes except the first one
+                      const transition = index > 0 ? {
+                        type: 'fade' as const,
+                        durationInFrames: Math.round(compositionContext.fps * 0.5), // 0.5s transition
+                      } : undefined;
+
+                      return {
+                        id: detailedScene.sceneId,
+                        name: sceneName,
+                        startFrame: detailedScene.from,
+                        durationInFrames: detailedScene.durationInFrames,
+                        transition,
+                        backgroundColor: '#000000',
+                      };
+                    }) ?? [];
+
                     const compositionData = {
                       name: result.videoPlan?.title ?? 'Generated Video',
                       width: compositionContext.width,
@@ -176,6 +221,7 @@ export async function POST(request: NextRequest) {
                       fps: compositionContext.fps,
                       durationInFrames: result.composition?.durationInFrames ?? Math.round(durationInSeconds * compositionContext.fps),
                       tracks: result.tracks,
+                      scenes, // Include scenes in the composition
                     };
 
                     controller.enqueue(
@@ -225,7 +271,7 @@ export async function POST(request: NextRequest) {
                 const genDuration = (genArgs.durationInFrames as number) ?? compositionContext.durationInFrames;
 
                 const compositionResponse = await ai.models.generateContent({
-                  model: 'gemini-3-pro-preview',
+                  model: 'gemini-3-flash-preview',
                   contents: `Generate a video composition JSON for: "${description}".
 
 Target: ${genWidth}x${genHeight}, ${genFps}fps, ${genDuration} frames.

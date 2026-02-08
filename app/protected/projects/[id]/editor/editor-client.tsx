@@ -16,13 +16,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useCompositionStore } from '@/lib/composition';
 import { useAutoSave, type SaveStatus } from '@/lib/composition/use-auto-save';
-import type { Track } from '@/lib/composition/types';
+import type { Track, Scene } from '@/lib/composition/types';
 import type { RemotionPreviewHandle } from '@/components/remotion/remotion-preview';
 import { PlaybackControls } from '@/components/remotion/playback-controls';
 import { Timeline } from './components/timeline';
 import { PropertiesPanel } from './components/properties-panel';
 import { useKeyboardShortcuts } from '@/lib/hooks/use-keyboard-shortcuts';
-import { Cloud, CloudOff, Loader2, Film, Blocks, SlidersHorizontal } from 'lucide-react';
+import { Cloud, CloudOff, Loader2, Film, Blocks, SlidersHorizontal, Save } from 'lucide-react';
 import type { PlayerRef } from '@remotion/player';
 import { AssetImport } from './components/asset-panel/asset-import';
 import { ComponentLibraryPanel } from './components/component-library-panel';
@@ -50,6 +50,7 @@ interface EditorClientProps {
     projectId: string;
     name: string;
     tracks: Track[];
+    scenes: Scene[];
     durationInFrames: number;
     fps: number;
     width: number;
@@ -64,38 +65,54 @@ interface EditorClientProps {
 function SaveStatusIndicator({
   status,
   lastSaved,
+  hasUnsavedChanges,
+  onSave,
 }: {
   status: SaveStatus;
   lastSaved: Date | null;
+  hasUnsavedChanges: boolean;
+  onSave: () => void;
 }) {
-  if (status === 'saving') {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Saving...</span>
-      </div>
-    );
-  }
+  return (
+    <div className="flex items-center gap-2">
+      {/* Manual Save Button */}
+      <button
+        onClick={onSave}
+        disabled={status === 'saving'}
+        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-sm font-medium transition-colors ${
+          hasUnsavedChanges
+            ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border border-amber-500/30'
+            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+        } disabled:opacity-50`}
+        title={hasUnsavedChanges ? 'Save changes (Ctrl+S)' : 'All changes saved'}
+      >
+        <Save className="h-3.5 w-3.5" />
+        Save
+      </button>
 
-  if (status === 'saved' && lastSaved) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
-        <Cloud className="h-4 w-4" />
-        <span>Saved</span>
-      </div>
-    );
-  }
+      {/* Status indicator */}
+      {status === 'saving' && (
+        <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Saving...</span>
+        </div>
+      )}
 
-  if (status === 'error') {
-    return (
-      <div className="flex items-center gap-2 text-destructive text-sm">
-        <CloudOff className="h-4 w-4" />
-        <span>Save failed</span>
-      </div>
-    );
-  }
+      {status === 'saved' && lastSaved && !hasUnsavedChanges && (
+        <div className="flex items-center gap-1.5 text-green-600 text-sm">
+          <Cloud className="h-3.5 w-3.5" />
+          <span>Saved</span>
+        </div>
+      )}
 
-  return null;
+      {status === 'error' && (
+        <div className="flex items-center gap-1.5 text-destructive text-sm">
+          <CloudOff className="h-3.5 w-3.5" />
+          <span>Failed</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // =============================================
@@ -166,6 +183,7 @@ export function EditorClient({ composition }: EditorClientProps) {
       projectId: composition.projectId,
       name: composition.name,
       tracks: composition.tracks,
+      scenes: composition.scenes,
       durationInFrames: composition.durationInFrames,
       fps: composition.fps,
       width: composition.width,
@@ -173,8 +191,20 @@ export function EditorClient({ composition }: EditorClientProps) {
     });
   }, [composition, loadComposition]);
 
-  // Auto-save composition changes
-  const saveState = useAutoSave(composition.id);
+  // Auto-save disabled - use Ctrl+S for manual save
+  const saveState = useAutoSave(composition.id, false);
+
+  // Ctrl+S keyboard shortcut for manual save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveState.saveNow();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [saveState.saveNow]);
 
   // Update playerRef when previewRef becomes available
   useEffect(() => {
@@ -231,6 +261,8 @@ export function EditorClient({ composition }: EditorClientProps) {
           <SaveStatusIndicator
             status={saveState.status}
             lastSaved={saveState.lastSaved}
+            hasUnsavedChanges={saveState.hasUnsavedChanges}
+            onSave={saveState.saveNow}
           />
         </div>
       </div>
@@ -277,7 +309,7 @@ export function EditorClient({ composition }: EditorClientProps) {
           {/* Tab content */}
           <div className="flex-1 overflow-hidden">
             {sidebarTab === 'properties' ? (
-              <PropertiesPanel selectedItemId={selectedItemId} />
+              <PropertiesPanel selectedItemId={selectedItemId} projectId={composition.projectId} />
             ) : (
               <ComponentLibraryPanel projectId={composition.projectId} />
             )}
@@ -286,7 +318,7 @@ export function EditorClient({ composition }: EditorClientProps) {
       </div>
 
       {/* Timeline */}
-      <div className="shrink-0 overflow-hidden" style={{ height: '350px' }}>
+      <div className="shrink-0" style={{ height: '350px' }}>
         <Timeline
           selectedItemId={selectedItemId}
           onSelectItem={handleSelectItem}

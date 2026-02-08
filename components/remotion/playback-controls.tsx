@@ -74,6 +74,20 @@ export function PlaybackControls({ playerRef }: PlaybackControlsProps) {
     }
   }, [currentFrame, playerRef]);
 
+  // Sync store isPlaying → player (for programmatic play/pause)
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    // Use isPlaying() method from Remotion PlayerRef
+    const playerIsPlaying = player.isPlaying();
+    if (isPlaying && !playerIsPlaying) {
+      player.play();
+    } else if (!isPlaying && playerIsPlaying) {
+      player.pause();
+    }
+  }, [isPlaying, playerRef]);
+
   const togglePlay = useCallback(() => {
     playerRef.current?.toggle();
   }, [playerRef]);

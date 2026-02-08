@@ -23,6 +23,7 @@ export type Database = {
           id: string
           name: string
           project_id: string
+          scenes: Json
           tracks: Json
           updated_at: string | null
           width: number
@@ -35,6 +36,7 @@ export type Database = {
           id?: string
           name?: string
           project_id: string
+          scenes?: Json
           tracks?: Json
           updated_at?: string | null
           width?: number
@@ -47,6 +49,7 @@ export type Database = {
           id?: string
           name?: string
           project_id?: string
+          scenes?: Json
           tracks?: Json
           updated_at?: string | null
           width?: number
@@ -56,6 +59,50 @@ export type Database = {
             foreignKeyName: "compositions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_components: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          original_html: string
+          preview_html: string
+          project_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          original_html: string
+          preview_html: string
+          project_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          original_html?: string
+          preview_html?: string
+          project_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_components_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },

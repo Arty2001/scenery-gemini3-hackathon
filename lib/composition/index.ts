@@ -43,4 +43,4 @@ export { useCompositionStore } from './store';
 // Hooks
 // =============================================
 
-export { useAutoSave, type SaveStatus, type AutoSaveState } from './use-auto-save';
+export { useAutoSave, type SaveStatus, type AutoSaveResult } from './use-auto-save';

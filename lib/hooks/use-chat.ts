@@ -25,12 +25,18 @@ export interface CompositionContext {
   fps: number;
   durationInFrames: number;
   tracks: Track[];
+  /** Scenes for slide-based editing */
+  scenes?: { id: string; name: string; startFrame: number; durationInFrames: number; backgroundColor?: string; transitionType?: string }[];
   components?: { id: string; name: string; category: string; props: string[]; description?: string }[];
+  /** Custom HTML components imported by the user */
+  customComponents?: { id: string; name: string; category: string | null; description: string | null; html: string }[];
   projectId?: string;
   /** Current playhead position in frames */
   currentFrame?: number;
   /** Currently selected item ID (if any) */
   selectedItemId?: string | null;
+  /** Currently selected scene ID (if any) */
+  selectedSceneId?: string | null;
 }
 
 interface GeminiMessage {
@@ -79,6 +85,7 @@ export function useChat() {
 
   // Cache discovered components for AI context
   const componentsRef = useRef<CompositionContext['components'] | null>(null);
+  const customComponentsRef = useRef<CompositionContext['customComponents'] | null>(null);
   const componentsFetchedRef = useRef(false);
 
   const addUserMessage = useCallback((content: string): string => {
@@ -153,11 +160,13 @@ export function useChat() {
         parts: [{ text: content }],
       });
 
-      // Fetch discovered components once (lazy, on first message)
+      // Fetch discovered components and custom HTML components once (lazy, on first message)
       if (!componentsFetchedRef.current) {
         componentsFetchedRef.current = true;
+        const storeState = useCompositionStore.getState();
+
+        // Fetch React components
         try {
-          const storeState = useCompositionStore.getState();
           const res = await fetch(`/api/projects/${storeState.projectId}/components`);
           if (res.ok) {
             const data = await res.json();
@@ -202,20 +211,54 @@ export function useChat() {
         } catch {
           // ignore - AI just won't have component context
         }
+
+        // Fetch custom HTML components
+        try {
+          const res = await fetch(`/api/projects/${storeState.projectId}/custom-components`);
+          if (res.ok) {
+            const data = await res.json();
+            console.log('[useChat] Fetched custom HTML components:', data.length);
+            customComponentsRef.current = data.map((c: {
+              id: string;
+              name: string;
+              category: string | null;
+              description: string | null;
+              previewHtml: string;
+            }) => ({
+              id: c.id,
+              name: c.name,
+              category: c.category,
+              description: c.description,
+              html: c.previewHtml,
+            }));
+          }
+        } catch {
+          // ignore - AI just won't have custom HTML context
+        }
       }
 
       // Always read latest store state for accurate context (not stale prop)
-      const storeState = useCompositionStore.getState();
+      const latestState = useCompositionStore.getState();
       const ctx: CompositionContext = {
-        width: storeState.width,
-        height: storeState.height,
-        fps: storeState.fps,
-        durationInFrames: storeState.durationInFrames,
-        tracks: storeState.tracks,
+        width: latestState.width,
+        height: latestState.height,
+        fps: latestState.fps,
+        durationInFrames: latestState.durationInFrames,
+        tracks: latestState.tracks,
+        scenes: latestState.scenes.length > 0 ? latestState.scenes.map(s => ({
+          id: s.id,
+          name: s.name,
+          startFrame: s.startFrame,
+          durationInFrames: s.durationInFrames,
+          backgroundColor: s.backgroundColor,
+          transitionType: s.transition?.type,
+        })) : undefined,
         components: componentsRef.current ?? undefined,
-        projectId: storeState.projectId,
-        currentFrame: storeState.currentFrame,
-        selectedItemId: storeState.selectedItemId,
+        customComponents: customComponentsRef.current ?? undefined,
+        projectId: latestState.projectId,
+        currentFrame: latestState.currentFrame,
+        selectedItemId: latestState.selectedItemId,
+        selectedSceneId: latestState.selectedSceneId,
       };
 
       try {

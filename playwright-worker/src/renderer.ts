@@ -6,6 +6,7 @@ export interface RenderOptions {
   componentName: string;
   props: Record<string, unknown>;
   timeout?: number;
+  wrapperName?: string; // Optional provider wrapper (e.g., 'ThemeProvider')
 }
 
 export interface RenderResult {
@@ -13,6 +14,7 @@ export interface RenderResult {
   html?: string;
   error?: string;
   renderTime?: number;
+  consoleLog?: string; // Browser console output for debugging
 }
 
 // Singleton browser instance for connection reuse
@@ -65,7 +67,7 @@ export async function closeBrowser(): Promise<void> {
  * Render a React component and extract its HTML
  */
 export async function renderComponent(options: RenderOptions): Promise<RenderResult> {
-  const { bundledJs, componentName, props, timeout = 15000 } = options;
+  const { bundledJs, componentName, props, timeout = 15000, wrapperName } = options;
   const startTime = Date.now();
 
   if (!browserContext) {
@@ -89,6 +91,7 @@ export async function renderComponent(options: RenderOptions): Promise<RenderRes
       bundledJs,
       componentName,
       props,
+      wrapperName,
     });
 
     // Load the page with the component
@@ -110,13 +113,14 @@ export async function renderComponent(options: RenderOptions): Promise<RenderRes
 
     // Check for errors
     const renderError = await page.evaluate(() => (window as any).__RENDER_ERROR__);
+    const consoleLogStr = consoleLogs.join('; ');
+
     if (renderError) {
-      // Include console logs in error for debugging
-      const logInfo = consoleLogs.length > 0 ? ` | Console: ${consoleLogs.join('; ')}` : '';
       return {
         success: false,
-        error: `Render error: ${renderError.message}${logInfo}`,
+        error: `Render error: ${renderError.message}`,
         renderTime: Date.now() - startTime,
+        consoleLog: consoleLogStr,
       };
     }
 
@@ -130,12 +134,11 @@ export async function renderComponent(options: RenderOptions): Promise<RenderRes
     });
 
     if (!renderedHtml || renderedHtml.trim() === '') {
-      // Include console logs to help debug why component rendered empty
-      const logInfo = consoleLogs.length > 0 ? ` | Console: ${consoleLogs.join('; ')}` : '';
       return {
         success: false,
-        error: `Empty render result - component may return null without required props (e.g., open=true for modals)${logInfo}`,
+        error: `Empty render result - component may return null without required props (e.g., open=true for modals)`,
         renderTime: Date.now() - startTime,
+        consoleLog: consoleLogStr,
       };
     }
 
@@ -143,6 +146,7 @@ export async function renderComponent(options: RenderOptions): Promise<RenderRes
       success: true,
       html: renderedHtml,
       renderTime: Date.now() - startTime,
+      consoleLog: consoleLogStr,
     };
 
   } catch (error) {

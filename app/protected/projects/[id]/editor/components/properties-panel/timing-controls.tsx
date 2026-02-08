@@ -54,8 +54,15 @@ export function TimingControls({ item, fps, onUpdate }: TimingControlsProps) {
             type="number"
             step="0.1"
             min="0"
-            value={startSeconds.toFixed(2)}
-            onChange={(e) => handleStartChange(e.target.value)}
+            defaultValue={startSeconds.toFixed(2)}
+            key={`start-${item.id}-${item.from}`}
+            onBlur={(e) => handleStartChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleStartChange(e.currentTarget.value);
+                e.currentTarget.blur();
+              }
+            }}
             className="h-8"
           />
         </div>
@@ -70,8 +77,15 @@ export function TimingControls({ item, fps, onUpdate }: TimingControlsProps) {
             type="number"
             step="0.1"
             min="0.1"
-            value={durationSeconds.toFixed(2)}
-            onChange={(e) => handleDurationChange(e.target.value)}
+            defaultValue={durationSeconds.toFixed(2)}
+            key={`duration-${item.id}-${item.durationInFrames}`}
+            onBlur={(e) => handleDurationChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleDurationChange(e.currentTarget.value);
+                e.currentTarget.blur();
+              }
+            }}
             className="h-8"
           />
         </div>

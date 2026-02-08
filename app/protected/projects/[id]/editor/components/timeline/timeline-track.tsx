@@ -19,7 +19,8 @@ interface TimelineTrackProps {
   track: Track;
   pixelsPerFrame: number;
   selectedItemId: string | null;
-  onSelectItem: (itemId: string | null) => void;
+  selectedItemIds: string[];
+  onSelectItem: (itemId: string | null, addToSelection?: boolean) => void;
   onReorderStart?: (trackId: string, e: React.MouseEvent) => void;
 }
 
@@ -30,12 +31,18 @@ const trackColors: Record<string, string> = {
   text: 'bg-green-500/10',
   video: 'bg-purple-500/10',
   audio: 'bg-orange-500/10',
+  image: 'bg-pink-500/10',
+  shape: 'bg-yellow-500/10',
+  cursor: 'bg-cyan-500/10',
+  particles: 'bg-indigo-500/10',
+  'custom-html': 'bg-emerald-500/10',
 };
 
 export function TimelineTrack({
   track,
   pixelsPerFrame,
   selectedItemId,
+  selectedItemIds,
   onSelectItem,
   onReorderStart,
 }: TimelineTrackProps) {
@@ -173,7 +180,7 @@ export function TimelineTrack({
             item={item}
             track={track}
             pixelsPerFrame={pixelsPerFrame}
-            isSelected={selectedItemId === item.id}
+            isSelected={selectedItemIds.includes(item.id)}
             onSelect={onSelectItem}
           />
         ))}

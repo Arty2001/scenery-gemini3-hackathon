@@ -165,8 +165,15 @@ export function ShapeProperties({ item, onUpdate }: ShapePropertiesProps) {
                 min={0}
                 max={20}
                 step={0.5}
-                value={item.strokeWidth ?? 2}
-                onChange={(e) => onUpdate({ strokeWidth: Number(e.target.value) } as Partial<ShapeItem>)}
+                defaultValue={item.strokeWidth ?? 2}
+                key={`strokeWidth-${item.id}-${item.strokeWidth}`}
+                onBlur={(e) => onUpdate({ strokeWidth: Number(e.target.value) } as Partial<ShapeItem>)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onUpdate({ strokeWidth: Number(e.currentTarget.value) } as Partial<ShapeItem>);
+                    e.currentTarget.blur();
+                  }
+                }}
               />
             </div>
           </div>
@@ -252,8 +259,15 @@ export function ShapeProperties({ item, onUpdate }: ShapePropertiesProps) {
                 min={0}
                 max={360}
                 step={5}
-                value={item.gradientDirection ?? 135}
-                onChange={(e) => onUpdate({ gradientDirection: Number(e.target.value) } as Partial<ShapeItem>)}
+                defaultValue={item.gradientDirection ?? 135}
+                key={`angle-${item.id}-${item.gradientDirection}`}
+                onBlur={(e) => onUpdate({ gradientDirection: Number(e.target.value) } as Partial<ShapeItem>)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onUpdate({ gradientDirection: Number(e.currentTarget.value) } as Partial<ShapeItem>);
+                    e.currentTarget.blur();
+                  }
+                }}
               />
             </div>
           </div>
@@ -281,8 +295,15 @@ export function ShapeProperties({ item, onUpdate }: ShapePropertiesProps) {
                 className="w-20 h-7 text-xs"
                 min={8}
                 max={48}
-                value={item.fontSize ?? 13}
-                onChange={(e) => onUpdate({ fontSize: Number(e.target.value) } as Partial<ShapeItem>)}
+                defaultValue={item.fontSize ?? 13}
+                key={`badgeFontSize-${item.id}-${item.fontSize}`}
+                onBlur={(e) => onUpdate({ fontSize: Number(e.target.value) } as Partial<ShapeItem>)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onUpdate({ fontSize: Number(e.currentTarget.value) } as Partial<ShapeItem>);
+                    e.currentTarget.blur();
+                  }
+                }}
               />
             </div>
             <div className="flex items-center justify-between gap-2">

@@ -288,7 +288,7 @@ const radixProxy = new Proxy({}, {
   get: (_, name) => createRadixComponent(String(name))
 });
 
-// React Hook Form mock
+// React Hook Form mock - uses shared __FORM_CONTEXT__ if available
 const reactHookForm = {
   useForm: () => ({
     register: () => ({}),
@@ -296,16 +296,29 @@ const reactHookForm = {
     watch: () => '',
     setValue: () => {},
     getValues: () => ({}),
-    formState: { errors: {}, isSubmitting: false, isValid: true },
+    getFieldState: () => ({ invalid: false, isDirty: false, isTouched: false, error: undefined }),
+    formState: { errors: {}, isSubmitting: false, isValid: true, isDirty: false },
     reset: () => {},
-    control: {},
+    control: {
+      register: () => ({}),
+      unregister: () => {},
+      getFieldState: () => ({ invalid: false, isDirty: false, isTouched: false, error: undefined }),
+      _formState: { errors: {}, isSubmitting: false, isValid: true, isDirty: false },
+      _fields: {},
+    },
   }),
-  Controller: ({ render, field }) => render ? render({ field: { value: '', onChange: () => {} } }) : null,
+  Controller: ({ render, field }) => render ? render({ field: { value: '', onChange: () => {}, onBlur: () => {}, name: '', ref: () => {} }, fieldState: { invalid: false, isDirty: false, isTouched: false, error: undefined } }) : null,
   FormProvider: ({ children }) => children,
-  useFormContext: () => reactHookForm.useForm(),
-  useController: () => ({ field: { value: '', onChange: () => {} }, fieldState: {} }),
+  useFormContext: () => {
+    // Use shared form context if available
+    if (typeof window !== 'undefined' && window.__FORM_CONTEXT__ && typeof React !== 'undefined') {
+      try { return React.useContext(window.__FORM_CONTEXT__); } catch (e) {}
+    }
+    return reactHookForm.useForm();
+  },
+  useController: () => ({ field: { value: '', onChange: () => {}, onBlur: () => {}, name: '', ref: () => {} }, fieldState: { invalid: false, isDirty: false, isTouched: false, error: undefined } }),
   useWatch: () => '',
-  useFieldArray: () => ({ fields: [], append: () => {}, remove: () => {} }),
+  useFieldArray: () => ({ fields: [], append: () => {}, remove: () => {}, prepend: () => {}, swap: () => {}, move: () => {}, insert: () => {}, update: () => {}, replace: () => {} }),
 };
 
 // Zod mock (schema validation)
@@ -342,13 +355,62 @@ const zod = {
 };
 zod.z = zod;
 
-// React Query / TanStack Query mock
+// React Query / TanStack Query mock - uses shared __QUERY_CONTEXT__ if available
 const reactQuery = {
-  useQuery: () => ({ data: null, isLoading: false, error: null, refetch: () => {} }),
-  useMutation: () => ({ mutate: () => {}, mutateAsync: async () => {}, isLoading: false }),
-  useQueryClient: () => ({ invalidateQueries: () => {} }),
+  useQuery: () => ({ data: null, isLoading: false, error: null, refetch: () => {}, isFetching: false, isSuccess: true }),
+  useMutation: () => ({ mutate: () => {}, mutateAsync: async () => {}, isLoading: false, isPending: false }),
+  useQueryClient: () => {
+    if (typeof window !== 'undefined' && window.__QUERY_CONTEXT__ && typeof React !== 'undefined') {
+      try { return React.useContext(window.__QUERY_CONTEXT__); } catch (e) {}
+    }
+    return { invalidateQueries: () => {}, refetchQueries: () => {}, getQueryData: () => null };
+  },
   QueryClient: function() { return {}; },
   QueryClientProvider: ({ children }) => children,
+};
+
+// Auth mocks - uses shared __AUTH_CONTEXT__ if available
+const authMock = {
+  useAuth: () => {
+    if (typeof window !== 'undefined' && window.__AUTH_CONTEXT__ && typeof React !== 'undefined') {
+      try { return React.useContext(window.__AUTH_CONTEXT__); } catch (e) {}
+    }
+    return { user: { id: '1', email: 'demo@example.com', name: 'Demo User' }, isAuthenticated: true, isLoading: false };
+  },
+  useUser: () => ({ id: '1', email: 'demo@example.com', name: 'Demo User' }),
+  useSession: () => ({ data: { user: { id: '1', email: 'demo@example.com', name: 'Demo User' } }, status: 'authenticated' }),
+  useClerk: () => ({ user: { id: '1', email: 'demo@example.com' }, signOut: () => {} }),
+  SignIn: () => React.createElement('div', { 'data-clerk': 'sign-in' }, 'Sign In'),
+  SignUp: () => React.createElement('div', { 'data-clerk': 'sign-up' }, 'Sign Up'),
+  UserButton: () => React.createElement('div', { 'data-clerk': 'user-button' }, 'User'),
+  SignedIn: ({ children }) => children,
+  SignedOut: ({ children }) => children,
+};
+
+// Toast mocks - uses shared __TOAST_CONTEXT__ if available
+const toastMock = {
+  useToast: () => {
+    if (typeof window !== 'undefined' && window.__TOAST_CONTEXT__ && typeof React !== 'undefined') {
+      try { return React.useContext(window.__TOAST_CONTEXT__); } catch (e) {}
+    }
+    return { toast: () => '1', toasts: [], dismiss: () => {} };
+  },
+  toast: () => '1',
+};
+
+// i18n mocks - uses shared __I18N_CONTEXT__ if available
+const i18nMock = {
+  useTranslation: () => {
+    if (typeof window !== 'undefined' && window.__I18N_CONTEXT__ && typeof React !== 'undefined') {
+      try {
+        const ctx = React.useContext(window.__I18N_CONTEXT__);
+        return { t: ctx.t || ((k) => k), i18n: ctx.i18n || { language: 'en' } };
+      } catch (e) {}
+    }
+    return { t: (k) => k, i18n: { language: 'en', changeLanguage: () => {} } };
+  },
+  Trans: ({ children }) => children,
+  I18nextProvider: ({ children }) => children,
 };
 
 // Recharts mock (charting library)
@@ -429,7 +491,13 @@ window.__SCENERY_MOCKS__ = {
   'next/image': { default: nextImage },
   'next/link': { default: nextLink },
   'next/navigation': {
-    useRouter: () => ({ push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, prefetch: () => {} }),
+    useRouter: () => {
+      // Use shared router context if available
+      if (typeof window !== 'undefined' && window.__ROUTER_CONTEXT__ && typeof React !== 'undefined') {
+        try { return React.useContext(window.__ROUTER_CONTEXT__); } catch (e) {}
+      }
+      return { push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, prefetch: () => {}, refresh: () => {} };
+    },
     usePathname: () => '/',
     useSearchParams: () => new URLSearchParams(),
     useParams: () => ({}),
@@ -437,7 +505,12 @@ window.__SCENERY_MOCKS__ = {
     notFound: () => {},
   },
   'next/router': {
-    useRouter: () => ({ push: () => {}, replace: () => {}, pathname: '/', query: {}, asPath: '/', events: { on: () => {}, off: () => {} } }),
+    useRouter: () => {
+      if (typeof window !== 'undefined' && window.__ROUTER_CONTEXT__ && typeof React !== 'undefined') {
+        try { return React.useContext(window.__ROUTER_CONTEXT__); } catch (e) {}
+      }
+      return { push: () => {}, replace: () => {}, pathname: '/', query: {}, asPath: '/', events: { on: () => {}, off: () => {} } };
+    },
   },
   'next/font/google': nextFontGoogle,
   'next/font/local': { default: nextFontLocal },
@@ -473,10 +546,29 @@ window.__SCENERY_MOCKS__ = {
     })
   }),
   'react-icons/fa': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/fa6': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
   'react-icons/fi': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
   'react-icons/hi': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/hi2': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
   'react-icons/md': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
   'react-icons/io': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/io5': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/bi': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/bs': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/ai': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/ri': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/si': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/gi': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/pi': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/tb': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/lu': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/rx': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  'react-icons/vsc': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  '@heroicons/react/24/solid': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  '@heroicons/react/24/outline': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  '@heroicons/react/20/solid': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  '@phosphor-icons/react': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
+  '@tabler/icons-react': new Proxy({}, { get: (_, name) => createIcon(String(name)) }),
 
   // Date libraries
   'dayjs': () => ({
@@ -490,9 +582,227 @@ window.__SCENERY_MOCKS__ = {
     add: () => ({ format: () => new Date().toLocaleDateString() }),
     subtract: () => ({ format: () => new Date().toLocaleDateString() }),
   }),
+
+  // State management libraries
+  'zustand': {
+    create: (fn) => {
+      const state = typeof fn === 'function' ? fn(() => {}, () => state, { setState: () => {}, getState: () => state }) : fn;
+      const useStore = (selector) => selector ? selector(state) : state;
+      useStore.getState = () => state;
+      useStore.setState = () => {};
+      useStore.subscribe = () => () => {};
+      return useStore;
+    },
+    createStore: (fn) => fn,
+  },
+  'zustand/middleware': {
+    persist: (fn) => fn,
+    devtools: (fn) => fn,
+    subscribeWithSelector: (fn) => fn,
+    combine: (a, b) => ({ ...a, ...b }),
+  },
+  'jotai': {
+    atom: (init) => ({ init }),
+    useAtom: () => [null, () => {}],
+    useAtomValue: () => null,
+    useSetAtom: () => () => {},
+    Provider: ({ children }) => children,
+  },
+  'jotai/utils': {
+    atomWithStorage: (key, init) => ({ key, init }),
+    atomWithReset: (init) => ({ init }),
+    useResetAtom: () => () => {},
+    useHydrateAtoms: () => {},
+  },
+  'recoil': {
+    atom: (config) => config,
+    selector: (config) => config,
+    useRecoilState: () => [null, () => {}],
+    useRecoilValue: () => null,
+    useSetRecoilState: () => () => {},
+    useResetRecoilState: () => () => {},
+    RecoilRoot: ({ children }) => children,
+  },
+  'valtio': {
+    proxy: (obj) => obj,
+    useSnapshot: (obj) => obj,
+    subscribe: () => () => {},
+    ref: (obj) => obj,
+  },
+
+  // SWR
+  'swr': {
+    default: () => ({ data: null, error: null, isLoading: false, isValidating: false, mutate: () => {} }),
+    useSWR: () => ({ data: null, error: null, isLoading: false, isValidating: false, mutate: () => {} }),
+    useSWRConfig: () => ({ mutate: () => {}, cache: new Map() }),
+    SWRConfig: ({ children }) => children,
+  },
+
+  // Drag and drop
+  '@dnd-kit/core': {
+    DndContext: ({ children }) => children,
+    useDraggable: () => ({ attributes: {}, listeners: {}, setNodeRef: () => {}, transform: null, isDragging: false }),
+    useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
+    DragOverlay: ({ children }) => children,
+    useSensor: () => ({}),
+    useSensors: () => [],
+    PointerSensor: {},
+    KeyboardSensor: {},
+    closestCenter: () => null,
+  },
+  '@dnd-kit/sortable': {
+    SortableContext: ({ children }) => children,
+    useSortable: () => ({ attributes: {}, listeners: {}, setNodeRef: () => {}, transform: null, transition: null, isDragging: false }),
+    sortableKeyboardCoordinates: () => ({}),
+    arrayMove: (arr, from, to) => arr,
+    verticalListSortingStrategy: {},
+    horizontalListSortingStrategy: {},
+  },
+  '@dnd-kit/utilities': {
+    CSS: { Transform: { toString: () => '' } },
+  },
+
+  // React Three Fiber (3D) - stub that doesn't render anything
+  '@react-three/fiber': {
+    Canvas: ({ children }) => React.createElement('div', { 'data-r3f': 'canvas' }, 'WebGL not supported in preview'),
+    useFrame: () => {},
+    useThree: () => ({ camera: {}, scene: {}, gl: {}, size: { width: 100, height: 100 } }),
+    useLoader: () => null,
+    extend: () => {},
+  },
+  '@react-three/drei': new Proxy({}, {
+    get: (_, name) => (props) => React.createElement('div', { 'data-drei': String(name).toLowerCase() })
+  }),
+
+  // Remotion (video) - stub
+  'remotion': {
+    useCurrentFrame: () => 0,
+    useVideoConfig: () => ({ width: 1920, height: 1080, fps: 30, durationInFrames: 300 }),
+    Composition: () => null,
+    Sequence: ({ children }) => children,
+    AbsoluteFill: ({ children, ...props }) => React.createElement('div', { style: { position: 'absolute', inset: 0 }, ...props }, children),
+    Audio: () => null,
+    Video: () => null,
+    Img: (props) => React.createElement('img', props),
+    spring: () => 0,
+    interpolate: () => 0,
+    continueRender: () => {},
+    delayRender: () => 0,
+  },
+
+  // Formik
+  'formik': {
+    useFormik: () => ({
+      values: {},
+      errors: {},
+      touched: {},
+      handleChange: () => {},
+      handleBlur: () => {},
+      handleSubmit: () => {},
+      setFieldValue: () => {},
+      setFieldTouched: () => {},
+      resetForm: () => {},
+      isSubmitting: false,
+      isValid: true,
+    }),
+    Formik: ({ children }) => typeof children === 'function' ? children({}) : children,
+    Form: ({ children }) => React.createElement('form', null, children),
+    Field: (props) => React.createElement('input', props),
+    ErrorMessage: () => null,
+  },
+
+  // React Hook Form (enhance existing)
+  '@hookform/error-message': {
+    ErrorMessage: () => null,
+  },
+
+  // Embla Carousel
+  'embla-carousel-react': {
+    default: () => [() => {}, { scrollPrev: () => {}, scrollNext: () => {}, canScrollPrev: () => false, canScrollNext: () => false, selectedScrollSnap: () => 0 }],
+    useEmblaCarousel: () => [() => {}, { scrollPrev: () => {}, scrollNext: () => {}, canScrollPrev: () => false, canScrollNext: () => false }],
+  },
+
+  // Swiper
+  'swiper/react': {
+    Swiper: ({ children }) => React.createElement('div', { 'data-swiper': 'container' }, children),
+    SwiperSlide: ({ children }) => React.createElement('div', { 'data-swiper': 'slide' }, children),
+    useSwiper: () => ({ slidePrev: () => {}, slideNext: () => {}, slideTo: () => {} }),
+  },
+
+  // React Player
+  'react-player': {
+    default: () => React.createElement('div', { 'data-player': 'video' }, 'Video Player'),
+  },
+
+  // React PDF
+  '@react-pdf/renderer': {
+    Document: ({ children }) => children,
+    Page: ({ children }) => children,
+    View: ({ children }) => React.createElement('div', null, children),
+    Text: ({ children }) => React.createElement('span', null, children),
+    Image: (props) => React.createElement('img', props),
+    StyleSheet: { create: (styles) => styles },
+    PDFViewer: ({ children }) => children,
+  },
+
+  // React Markdown
+  'react-markdown': {
+    default: ({ children }) => React.createElement('div', { 'data-markdown': true }, children),
+  },
+
+  // Highlight.js / Prism
+  'react-syntax-highlighter': {
+    Prism: ({ children }) => React.createElement('pre', null, React.createElement('code', null, children)),
+    Light: ({ children }) => React.createElement('pre', null, React.createElement('code', null, children)),
+  },
+  'react-syntax-highlighter/dist/esm/styles/prism': new Proxy({}, { get: () => ({}) }),
+  'react-syntax-highlighter/dist/esm/styles/hljs': new Proxy({}, { get: () => ({}) }),
 };
 
+// next-themes mock for useTheme - uses global ThemeContext if available
+const nextThemes = {
+  useTheme: () => {
+    // Try to use the global ThemeContext from html-template if available
+    if (typeof window !== 'undefined' && window.__THEME_CONTEXT__ && typeof React !== 'undefined') {
+      try {
+        return React.useContext(window.__THEME_CONTEXT__);
+      } catch (e) {
+        // Fallback if useContext fails (called outside render)
+      }
+    }
+    // Default fallback
+    return {
+      theme: 'light',
+      setTheme: () => {},
+      resolvedTheme: 'light',
+      themes: ['light', 'dark'],
+      systemTheme: 'light',
+    };
+  },
+  ThemeProvider: ({ children }) => children,
+};
+
+window.__SCENERY_MOCKS__['next-themes'] = nextThemes;
+
+// Auth libraries
+window.__SCENERY_MOCKS__['@clerk/nextjs'] = authMock;
+window.__SCENERY_MOCKS__['@clerk/clerk-react'] = authMock;
+window.__SCENERY_MOCKS__['next-auth/react'] = { ...authMock, signIn: () => {}, signOut: () => {}, getSession: async () => null };
+window.__SCENERY_MOCKS__['@auth/nextjs'] = authMock;
+
+// Toast libraries (override with context-aware version)
+window.__SCENERY_MOCKS__['sonner'] = { ...sonner, ...toastMock };
+window.__SCENERY_MOCKS__['react-hot-toast'] = { ...reactHotToast, ...toastMock };
+window.__SCENERY_MOCKS__['@/hooks/use-toast'] = toastMock;
+window.__SCENERY_MOCKS__['@/components/ui/use-toast'] = toastMock;
+
+// i18n libraries
+window.__SCENERY_MOCKS__['react-i18next'] = i18nMock;
+window.__SCENERY_MOCKS__['next-intl'] = { ...i18nMock, useMessages: () => ({}), useLocale: () => 'en', useNow: () => new Date(), useTimeZone: () => 'UTC' };
+window.__SCENERY_MOCKS__['react-intl'] = { ...i18nMock, FormattedMessage: ({ id }) => id, IntlProvider: ({ children }) => children };
+
 // Create Radix proxies for all common packages
+// The proxy supports both direct access (radixProxy.Root) and module patterns
 const radixPackages = [
   '@radix-ui/react-dialog',
   '@radix-ui/react-dropdown-menu',
@@ -518,6 +828,10 @@ const radixPackages = [
   '@radix-ui/react-separator',
   '@radix-ui/react-toggle',
   '@radix-ui/react-toggle-group',
+  '@radix-ui/react-label',
+  '@radix-ui/react-slot',
+  '@radix-ui/react-primitive',
+  '@radix-ui/react-toast',
 ];
 
 radixPackages.forEach(pkg => {
@@ -732,6 +1046,71 @@ console.log('[bundle] Set window.__SCENERY_COMPONENT__:', typeof window.__SCENER
               return { contents: 'export default window.React;', loader: 'js' };
             });
 
+            // Handle CSS imports (including CSS modules)
+            build.onResolve({ filter: /\.css$/ }, (args) => {
+              return { path: args.path, namespace: 'css-stub' };
+            });
+            build.onLoad({ filter: /.*/, namespace: 'css-stub' }, (args) => {
+              // Return an empty object for CSS modules, no-op for regular CSS
+              const isModule = args.path.includes('.module.');
+              if (isModule) {
+                return {
+                  contents: `
+                    // CSS Module stub - returns empty object with Proxy for any class access
+                    export default new Proxy({}, { get: (_, name) => String(name) });
+                  `,
+                  loader: 'js',
+                };
+              }
+              return { contents: '', loader: 'js' };
+            });
+
+            // Handle SVG imports (as React components)
+            build.onResolve({ filter: /\.svg$/ }, (args) => {
+              return { path: args.path, namespace: 'svg-stub' };
+            });
+            build.onLoad({ filter: /.*/, namespace: 'svg-stub' }, (args) => {
+              const name = args.path.split('/').pop()?.replace('.svg', '') || 'Svg';
+              return {
+                contents: `
+                  // SVG stub component
+                  const SvgComponent = (props) => React.createElement('svg', {
+                    xmlns: 'http://www.w3.org/2000/svg',
+                    width: 24,
+                    height: 24,
+                    viewBox: '0 0 24 24',
+                    fill: 'none',
+                    stroke: 'currentColor',
+                    'data-svg': '${name}',
+                    ...props,
+                  });
+                  export default SvgComponent;
+                  export const ReactComponent = SvgComponent;
+                `,
+                loader: 'js',
+              };
+            });
+
+            // Handle image imports
+            build.onResolve({ filter: /\.(png|jpe?g|gif|webp|ico|bmp)$/ }, (args) => {
+              return { path: args.path, namespace: 'image-stub' };
+            });
+            build.onLoad({ filter: /.*/, namespace: 'image-stub' }, (args) => {
+              return {
+                contents: `export default '${args.path}';`,
+                loader: 'js',
+              };
+            });
+
+            // Handle JSON imports
+            build.onResolve({ filter: /\.json$/ }, (args) => {
+              // Try to resolve from repo source map first
+              return { path: args.path, namespace: 'json-stub' };
+            });
+            build.onLoad({ filter: /.*/, namespace: 'json-stub' }, () => {
+              return { contents: 'export default {};', loader: 'js' };
+            });
+
             // Handle mocked/external packages
             build.onResolve({ filter: /.*/ }, (args) => {
               if (args.kind === 'entry-point') return undefined;
@@ -755,6 +1134,55 @@ console.log('[bundle] Set window.__SCENERY_COMPONENT__:', typeof window.__SCENER
                 .map(name => `export const ${name} = registeredMock ? (registeredMock['${name}'] ?? mockFn) : mockFn;`)
                 .join('\n');
 
+              // Check if this is a Radix UI package - needs common component part exports
+              const isRadixPackage = pkgName.startsWith('@radix-ui/react-');
+
+              // Common Radix component parts that need to be exported for namespace imports
+              const radixParts = isRadixPackage ? `
+// Radix component parts for namespace imports (import * as XPrimitive)
+export const Root = registeredMock ? (registeredMock['Root'] ?? registeredMock) : mockFn;
+export const Trigger = registeredMock ? (registeredMock['Trigger'] ?? registeredMock) : mockFn;
+export const Content = registeredMock ? (registeredMock['Content'] ?? registeredMock) : mockFn;
+export const Portal = registeredMock ? (registeredMock['Portal'] ?? registeredMock) : mockFn;
+export const Overlay = registeredMock ? (registeredMock['Overlay'] ?? registeredMock) : mockFn;
+export const Title = registeredMock ? (registeredMock['Title'] ?? registeredMock) : mockFn;
+export const Description = registeredMock ? (registeredMock['Description'] ?? registeredMock) : mockFn;
+export const Close = registeredMock ? (registeredMock['Close'] ?? registeredMock) : mockFn;
+export const Action = registeredMock ? (registeredMock['Action'] ?? registeredMock) : mockFn;
+export const Cancel = registeredMock ? (registeredMock['Cancel'] ?? registeredMock) : mockFn;
+export const Item = registeredMock ? (registeredMock['Item'] ?? registeredMock) : mockFn;
+export const ItemText = registeredMock ? (registeredMock['ItemText'] ?? registeredMock) : mockFn;
+export const ItemIndicator = registeredMock ? (registeredMock['ItemIndicator'] ?? registeredMock) : mockFn;
+export const Group = registeredMock ? (registeredMock['Group'] ?? registeredMock) : mockFn;
+export const Label = registeredMock ? (registeredMock['Label'] ?? registeredMock) : mockFn;
+export const Separator = registeredMock ? (registeredMock['Separator'] ?? registeredMock) : mockFn;
+export const Arrow = registeredMock ? (registeredMock['Arrow'] ?? registeredMock) : mockFn;
+export const Value = registeredMock ? (registeredMock['Value'] ?? registeredMock) : mockFn;
+export const Icon = registeredMock ? (registeredMock['Icon'] ?? registeredMock) : mockFn;
+export const Viewport = registeredMock ? (registeredMock['Viewport'] ?? registeredMock) : mockFn;
+export const ScrollUpButton = registeredMock ? (registeredMock['ScrollUpButton'] ?? registeredMock) : mockFn;
+export const ScrollDownButton = registeredMock ? (registeredMock['ScrollDownButton'] ?? registeredMock) : mockFn;
+export const Track = registeredMock ? (registeredMock['Track'] ?? registeredMock) : mockFn;
+export const Range = registeredMock ? (registeredMock['Range'] ?? registeredMock) : mockFn;
+export const Thumb = registeredMock ? (registeredMock['Thumb'] ?? registeredMock) : mockFn;
+export const Header = registeredMock ? (registeredMock['Header'] ?? registeredMock) : mockFn;
+export const Body = registeredMock ? (registeredMock['Body'] ?? registeredMock) : mockFn;
+export const Footer = registeredMock ? (registeredMock['Footer'] ?? registeredMock) : mockFn;
+export const List = registeredMock ? (registeredMock['List'] ?? registeredMock) : mockFn;
+export const Indicator = registeredMock ? (registeredMock['Indicator'] ?? registeredMock) : mockFn;
+export const Image = registeredMock ? (registeredMock['Image'] ?? registeredMock) : mockFn;
+export const Fallback = registeredMock ? (registeredMock['Fallback'] ?? registeredMock) : mockFn;
+export const Corner = registeredMock ? (registeredMock['Corner'] ?? registeredMock) : mockFn;
+export const Scrollbar = registeredMock ? (registeredMock['Scrollbar'] ?? registeredMock) : mockFn;
+export const Sub = registeredMock ? (registeredMock['Sub'] ?? registeredMock) : mockFn;
+export const SubTrigger = registeredMock ? (registeredMock['SubTrigger'] ?? registeredMock) : mockFn;
+export const SubContent = registeredMock ? (registeredMock['SubContent'] ?? registeredMock) : mockFn;
+export const RadioGroup = registeredMock ? (registeredMock['RadioGroup'] ?? registeredMock) : mockFn;
+export const RadioItem = registeredMock ? (registeredMock['RadioItem'] ?? registeredMock) : mockFn;
+export const CheckboxItem = registeredMock ? (registeredMock['CheckboxItem'] ?? registeredMock) : mockFn;
+export const Provider = registeredMock ? (registeredMock['Provider'] ?? registeredMock) : mockFn;
+` : '';
+
               const mockCode = `
 // Mock for: ${pkgName}
 // Exports: ${Array.from(packageImports).join(', ') || 'default only'}
@@ -767,6 +1195,7 @@ export default registeredMock?.default || registeredMock || mockFn;
 
 // Named exports (from import analysis) - use registered mock if available
 ${namedExports}
+${radixParts}
 `;
               return { contents: mockCode, loader: 'js' };
             });

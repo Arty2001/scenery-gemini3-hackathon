@@ -193,14 +193,21 @@ export function ComponentItemRenderer({
   const kfOpacity = kf.opacity ?? 1;
   const kfScale = kf.scale ?? 1;
   const kfRotation = kf.rotation ?? 0;
-  const posX = kf.positionX ?? item.position?.x;
-  const posY = kf.positionY ?? item.position?.y;
-  const hasPosition = posX != null || posY != null;
+  // Always use explicit positioning with default to center (0.5, 0.5)
+  // This ensures consistent behavior when composition dimensions change
+  const posX = kf.positionX ?? item.position?.x ?? 0.5;
+  const posY = kf.positionY ?? item.position?.y ?? 0.5;
 
   // Build advanced styles from keyframes
-  const filterStyle = buildFilterStyle(kf);
+  const kfFilterStyle = buildFilterStyle(kf);
   const skewTransform = buildSkewTransform(kf);
   const shadowStyle = buildShadowStyle(kf);
+
+  // Combine keyframe filter with animation filter (e.g., zoom-blur)
+  const combinedFilter = [
+    kfFilterStyle !== 'none' ? kfFilterStyle : '',
+    animStyle.filter ?? '',
+  ].filter(Boolean).join(' ') || undefined;
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -246,7 +253,7 @@ export function ComponentItemRenderer({
               kfRotation !== 0 ? `rotate(${kfRotation}deg)` : '',
               skewTransform,
             ].filter(v => v && v !== 'none').join(' ') || 'none',
-            filter: filterStyle !== 'none' ? filterStyle : undefined,
+            filter: combinedFilter,
             boxShadow: shadowStyle,
           }}
         >
@@ -265,8 +272,9 @@ export function ComponentItemRenderer({
     );
   }
 
-  const frameW = hasCustomSize ? (item.containerWidth ?? preset?.width ?? 1280) : preset!.width;
-  const frameH = hasCustomSize ? (item.containerHeight ?? preset?.height ?? 800) : preset!.height;
+  // Use composition dimensions as fallback when no preset (e.g., displaySize='full')
+  const frameW = hasCustomSize ? (item.containerWidth ?? preset?.width ?? compWidth) : preset!.width;
+  const frameH = hasCustomSize ? (item.containerHeight ?? preset?.height ?? compHeight) : preset!.height;
   const isPhoneRatio = frameH > frameW * 1.5;
   const { h, v } = parseAlignment(item.objectPosition ?? 'center center');
 
@@ -285,31 +293,22 @@ export function ComponentItemRenderer({
     v <= 0.25 ? '0%' : v >= 0.75 ? '-100%' : '-50%';
 
   return (
-    <AbsoluteFill
-      style={hasPosition ? {} : {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <AbsoluteFill>
       {/* Outer animation wrapper — handles opacity, enter/exit/keyframe transforms */}
       <div
         style={{
+          position: 'absolute',
+          left: `${posX * 100}%`,
+          top: `${posY * 100}%`,
+          transform: [
+            `translate(${getTranslatePercent(posX)}, ${getTranslatePercent(posY)})`,
+            kfScale !== 1 ? `scale(${kfScale})` : '',
+            kfRotation !== 0 ? `rotate(${kfRotation}deg)` : '',
+            skewTransform,
+            animStyle.transform !== 'none' ? animStyle.transform : '',
+          ].filter(Boolean).join(' ') || 'none',
           opacity: animStyle.opacity * kfOpacity,
-          transform: transforms,
-          filter: filterStyle !== 'none' ? filterStyle : undefined,
-          ...(hasPosition ? {
-            position: 'absolute' as const,
-            left: `${(posX ?? 0.5) * 100}%`,
-            top: `${(posY ?? 0.5) * 100}%`,
-            transform: [
-              `translate(${getTranslatePercent(posX ?? 0.5)}, ${getTranslatePercent(posY ?? 0.5)})`,
-              kfScale !== 1 ? `scale(${kfScale})` : '',
-              kfRotation !== 0 ? `rotate(${kfRotation}deg)` : '',
-              skewTransform,
-              animStyle.transform !== 'none' ? animStyle.transform : '',
-            ].filter(Boolean).join(' ') || 'none',
-          } : {}),
+          filter: combinedFilter,
         }}
       >
         {/* Device frame — uses CSS zoom for crisp rendering (no bitmap scaling) */}
@@ -322,7 +321,7 @@ export function ComponentItemRenderer({
             boxShadow: shadowStyle ?? (isSelected
               ? '0 0 0 3px rgba(59,130,246,0.7), 0 4px 16px rgba(0,0,0,0.12)'
               : '0 4px 16px rgba(0,0,0,0.12)'),
-            backgroundColor: '#fff',
+            backgroundColor: item.backgroundColor === 'transparent' ? undefined : (item.backgroundColor ?? '#fff'),
             zoom: zoomLevel,
           }}
         >

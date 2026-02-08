@@ -123,6 +123,7 @@ export async function runAssemblyAgent(
   const componentItems: GeneratedItem[] = [];
   const textItems: GeneratedItem[] = [];
   const shapeItems: GeneratedItem[] = [];
+  const imageItems: GeneratedItem[] = [];
   const cursorItems: GeneratedItem[] = [];
   const audioItems: GeneratedItem[] = [];
 
@@ -145,6 +146,13 @@ export async function runAssemblyAgent(
     // Process shapes
     for (const shape of scene.shapes) {
       shapeItems.push(createShapeItem(shape, scene.from, scene.durationInFrames, composition));
+    }
+
+    // Process images
+    if (scene.images) {
+      for (const image of scene.images) {
+        imageItems.push(createImageItem(image, scene.from, scene.durationInFrames, composition));
+      }
     }
 
     // Process cursor
@@ -188,7 +196,20 @@ export async function runAssemblyAgent(
     });
   }
 
-  // 2. COMPONENTS (main content layer - renders on top of shapes)
+  // 2. IMAGES (logo/icon layer - renders on top of shapes, below components)
+  for (let i = 0; i < imageItems.length; i++) {
+    const image = imageItems[i];
+    const imageName = (image.alt as string) || `Image ${i + 1}`;
+    tracks.push({
+      name: imageName,
+      type: 'image',
+      locked: false,
+      visible: true,
+      items: [image],
+    });
+  }
+
+  // 3. COMPONENTS (main content layer - renders on top of images)
   for (const compItem of componentItems) {
     const compName = context.components.find(c => c.id === compItem.componentId)?.name || 'Component';
     tracks.push({
@@ -200,7 +221,7 @@ export async function runAssemblyAgent(
     });
   }
 
-  // 3. TEXT (overlay layer - renders on top of components)
+  // 4. TEXT (overlay layer - renders on top of components)
   for (const textItem of textItems) {
     const textPreview = (textItem.text as string)?.slice(0, 20) || 'Text';
     tracks.push({
@@ -212,7 +233,7 @@ export async function runAssemblyAgent(
     });
   }
 
-  // 4. CURSORS (top layer - always visible)
+  // 5. CURSORS (top layer - always visible)
   for (let i = 0; i < cursorItems.length; i++) {
     tracks.push({
       name: `Cursor ${i + 1}`,
@@ -223,7 +244,7 @@ export async function runAssemblyAgent(
     });
   }
 
-  // 5. Audio tracks (no visual, order doesn't matter)
+  // 6. Audio tracks (no visual, order doesn't matter)
   for (let i = 0; i < audioItems.length; i++) {
     tracks.push({
       name: `Narration ${i + 1}`,
@@ -245,7 +266,7 @@ export async function runAssemblyAgent(
 
   onProgress?.(
     `✅ Assembly Agent: Created composition with ${tracks.length} tracks, ${
-      componentItems.length + textItems.length + shapeItems.length + cursorItems.length
+      componentItems.length + textItems.length + shapeItems.length + imageItems.length + cursorItems.length
     } total items`
   );
 
@@ -428,6 +449,46 @@ function createShapeItem(
     color: shape.color,
     svgContent: shape.svgContent,
     viewBox: shape.viewBox,
+    keyframes,
+  };
+}
+
+function createImageItem(
+  image: NonNullable<DetailedScene['images']>[0],
+  sceneStart: number,
+  sceneDuration: number,
+  dims: CompositionDims
+): GeneratedItem {
+  const itemStart = sceneStart + (image.offsetFrames || 0);
+  const itemDuration = image.durationInFrames || sceneDuration - (image.offsetFrames || 0);
+
+  // Fix keyframe timings if AI used absolute frames instead of relative
+  const fixedKfs = fixKeyframeTimings((image.keyframes || []) as unknown as Record<string, unknown>[]);
+
+  // Convert keyframes - frames are RELATIVE to item start
+  const keyframes: PropertyKeyframe[] = fixedKfs.map((kf) =>
+    normalizeKeyframe(kf)
+  );
+
+  // Add default entrance animation if no keyframes
+  if (keyframes.length === 0) {
+    keyframes.push(
+      { frame: 0, values: { opacity: 0, scale: 0.9 }, easing: 'ease-out' as EasingType },
+      { frame: 20, values: { opacity: 1, scale: 1 }, easing: 'ease-out' as EasingType }
+    );
+  }
+
+  return {
+    id: generateId(),
+    type: 'image',
+    src: image.src,
+    alt: image.alt,
+    from: itemStart,
+    durationInFrames: itemDuration,
+    position: image.position,
+    width: image.width,
+    height: image.height,
+    clipShape: image.clipShape || 'none',
     keyframes,
   };
 }

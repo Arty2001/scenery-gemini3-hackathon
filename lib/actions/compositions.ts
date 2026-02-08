@@ -9,7 +9,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import type { Track } from '@/lib/composition/types';
+import type { Track, Scene } from '@/lib/composition/types';
 import type { Json } from '@/types/database.types';
 import { isDemoProject } from '@/lib/demo-projects';
 
@@ -22,6 +22,7 @@ export interface CompositionData {
   projectId: string;
   name: string;
   tracks: Track[];
+  scenes: Scene[];
   durationInFrames: number;
   fps: number;
   width: number;
@@ -57,6 +58,7 @@ export async function getOrCreateComposition(
         projectId: existing.project_id,
         name: existing.name,
         tracks: (existing.tracks as unknown as Track[]) ?? [],
+        scenes: (existing.scenes as unknown as Scene[]) ?? [],
         durationInFrames: existing.duration_in_frames,
         fps: existing.fps,
         width: existing.width,
@@ -71,6 +73,7 @@ export async function getOrCreateComposition(
         project_id: projectId,
         name: 'Demo Composition',
         tracks: [] as unknown as Json,
+        scenes: [] as unknown as Json,
         duration_in_frames: 900,
         fps: 30,
         width: 1920,
@@ -87,6 +90,7 @@ export async function getOrCreateComposition(
         projectId,
         name: 'Demo Composition',
         tracks: [],
+        scenes: [],
         durationInFrames: 900,
         fps: 30,
         width: 1920,
@@ -99,6 +103,7 @@ export async function getOrCreateComposition(
       projectId: created.project_id,
       name: created.name,
       tracks: (created.tracks as unknown as Track[]) ?? [],
+      scenes: (created.scenes as unknown as Scene[]) ?? [],
       durationInFrames: created.duration_in_frames,
       fps: created.fps,
       width: created.width,
@@ -125,6 +130,7 @@ export async function getOrCreateComposition(
       projectId: existing.project_id,
       name: existing.name,
       tracks: (existing.tracks as unknown as Track[]) ?? [],
+      scenes: (existing.scenes as unknown as Scene[]) ?? [],
       durationInFrames: existing.duration_in_frames,
       fps: existing.fps,
       width: existing.width,
@@ -139,6 +145,7 @@ export async function getOrCreateComposition(
       project_id: projectId,
       name: 'Untitled Composition',
       tracks: [] as unknown as Json,
+      scenes: [] as unknown as Json,
       duration_in_frames: 900, // 30 seconds at 30fps
       fps: 30,
       width: 1920,
@@ -157,6 +164,7 @@ export async function getOrCreateComposition(
     projectId: created.project_id,
     name: created.name,
     tracks: (created.tracks as unknown as Track[]) ?? [],
+    scenes: (created.scenes as unknown as Scene[]) ?? [],
     durationInFrames: created.duration_in_frames,
     fps: created.fps,
     width: created.width,
@@ -173,6 +181,7 @@ export async function saveComposition(
   data: {
     name?: string;
     tracks?: Track[];
+    scenes?: Scene[];
     durationInFrames?: number;
     fps?: number;
     width?: number;
@@ -194,6 +203,7 @@ export async function saveComposition(
   const updateData: Record<string, unknown> = {};
   if (data.name !== undefined) updateData.name = data.name;
   if (data.tracks !== undefined) updateData.tracks = data.tracks as unknown as Json;
+  if (data.scenes !== undefined) updateData.scenes = data.scenes as unknown as Json;
   if (data.durationInFrames !== undefined) updateData.duration_in_frames = data.durationInFrames;
   if (data.fps !== undefined) updateData.fps = data.fps;
   if (data.width !== undefined) updateData.width = data.width;
