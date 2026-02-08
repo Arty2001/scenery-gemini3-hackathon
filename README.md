@@ -234,51 +234,7 @@ function isServerComponent(sourceCode: string): boolean {
 }
 ```
 
-**Gemini Transformation:**
-```typescript
-// lib/component-discovery/ssr-preview.ts
-async function transformServerToClient(sourceCode: string, componentName: string) {
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: `Transform this Server Component to client-renderable.
-
-ORIGINAL CODE:
-${sourceCode}
-
-TRANSFORMATION RULES:
-1. Remove async keyword from function declaration
-2. Replace await calls with realistic mock data
-3. Remove redirect(), notFound() guards entirely
-4. Transform Promise-based params to plain objects
-5. Keep all JSX structure and styling intact
-
-EXAMPLE - Auth Protected Component:
-Before:
-  import { auth } from "@/auth";
-  import { redirect } from "next/navigation";
-  export default async function Profile() {
-    const session = await auth();
-    if (!session) redirect("/login");
-    return <div>Welcome, {session.user.name}</div>;
-  }
-
-After:
-  export default function Profile() {
-    const session = { user: { name: "John Doe", email: "john@example.com" } };
-    return <div>Welcome, {session.user.name}</div>;
-  }`,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: clientCodeSchema
-    }
-  });
-
-  // Post-transform cleanup catches anything Gemini missed
-  return cleanupTransformedCode(result.code);
-}
-```
-
-**Why this matters:** Modern Next.js apps are 60%+ Server Components. Without this transformation, most components would fail to render. This enables Scenery to work with **any** Next.js 13/14/15 codebase.
+**Gemini Transformation:** Converts async components to client-safe versions by removing `await`, replacing database calls with mock data, and stripping auth guards—enabling Scenery to work with **any** Next.js 13/14/15 codebase.
 
 ### Integration 4: Tailwind → Inline CSS Conversion
 
@@ -365,89 +321,7 @@ User: "Create a product video showing our auth flow"
                     🎥 Final Video Composition
 ```
 
-**Director Agent Implementation:**
-```typescript
-// lib/ai/video-generation/director-agent.ts
-const VIDEO_PLAN_TOOL: Tool = {
-  functionDeclarations: [{
-    name: 'create_video_plan',
-    description: 'Create high-level video structure',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        title: { type: 'STRING' },
-        tone: {
-          type: 'STRING',
-          enum: ['professional', 'playful', 'technical', 'inspirational']
-        },
-        scenes: {
-          type: 'ARRAY',
-          items: {
-            type: 'OBJECT',
-            properties: {
-              type: { type: 'STRING', enum: ['intro', 'feature', 'demo', 'outro'] },
-              durationPercentage: { type: 'NUMBER' },
-              componentIds: { type: 'ARRAY', items: { type: 'STRING' } },
-              narration: { type: 'STRING' },
-              interactionGoals: { type: 'ARRAY', items: { type: 'STRING' } }
-            }
-          }
-        }
-      }
-    }
-  }]
-};
-
-const response = await ai.models.generateContent({
-  model: 'gemini-3-pro-preview',
-  contents: [
-    { role: 'user', parts: [{ text: systemPrompt }] },
-    { role: 'user', parts: [{ text: userPrompt }] }
-  ],
-  config: { tools: [VIDEO_PLAN_TOOL] }
-});
-```
-
-**Scene Planner with 10+ Tools:**
-```typescript
-// lib/ai/video-generation/scene-planner-agent.ts
-const SCENE_TOOLS: Tool = {
-  functionDeclarations: [
-    {
-      name: 'add_text_element',
-      parameters: {
-        content: { type: 'STRING' },
-        position: { type: 'OBJECT', properties: { x: { type: 'NUMBER' }, y: { type: 'NUMBER' } } },
-        fontSize: { type: 'NUMBER' },
-        fontWeight: { type: 'STRING' },
-        color: { type: 'STRING' },
-        animation: { type: 'STRING', enum: ['fadeIn', 'slideUp', 'typewriter', 'bounce'] },
-        keyframes: { type: 'ARRAY' }
-      }
-    },
-    {
-      name: 'add_component',
-      parameters: {
-        componentId: { type: 'STRING' },
-        position: { type: 'OBJECT' },
-        scale: { type: 'NUMBER' },
-        enterAnimation: { type: 'STRING' },
-        exitAnimation: { type: 'STRING' }
-      }
-    },
-    {
-      name: 'add_cursor_interaction',
-      parameters: {
-        targetSelector: { type: 'STRING' },
-        action: { type: 'STRING', enum: ['click', 'hover', 'type', 'drag'] },
-        typeText: { type: 'STRING' },
-        timing: { type: 'OBJECT', properties: { startFrame: { type: 'NUMBER' }, duration: { type: 'NUMBER' } } }
-      }
-    },
-    // ... 7 more tools
-  ]
-};
-```
+**Function Calling Tools:** Director uses `create_video_plan` for narrative structure, Scene Planner uses 10+ tools (`add_text_element`, `add_component`, `add_cursor_interaction`, etc.) for precise animation control.
 
 ### Integration 7: Text-to-Speech Voiceover
 
@@ -576,173 +450,16 @@ Present components in context with professional device frames:
 - **Dividers and badges** for professional layouts
 - **Custom SVG** with viewBox support
 
-### Animated Gradient Backgrounds (NEW!)
+### Additional Features
 
-Full-featured gradient system for stunning visual backdrops:
-
-| Feature | Description |
-|---------|-------------|
-| **Gradient Types** | Linear, radial, and conic gradients |
-| **Multi-Color Stops** | Add unlimited color stops with position control |
-| **Animation** | Rotating angles and color-shifting effects |
-| **Size & Position** | Full control over placement and dimensions |
-
-```typescript
-// AI Tool: add_gradient
-add_gradient({
-  gradientType: 'linear',
-  colors: [
-    { color: '#6366f1', position: 0 },
-    { color: '#06b6d4', position: 50 },
-    { color: '#ec4899', position: 100 }
-  ],
-  angle: 135,
-  animate: true,
-  animateAngle: true,
-  speed: 1.5
-});
-```
-
-### Text Effects (NEW!)
-
-Professional-grade text styling with three new effect systems:
-
-| Effect | Description | Use Case |
-|--------|-------------|----------|
-| **Gradient Fill** | Multi-color gradient text with animation | Hero titles, branding |
-| **Glow Effect** | Customizable text glow with pulse animation | CTAs, emphasis |
-| **Glass Effect** | Frosted glass background with backdrop blur | Modern UI, overlays |
-
-```
-                              Text Element
-                    ┌──────────────┼──────────────┐
-                    ▼              ▼              ▼
-        ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-        │ 🌈 GRADIENT   │  │ ✨ GLOW       │  │ 🪟 GLASS      │
-        │               │  │               │  │               │
-        │ Multi-color   │  │ Custom color  │  │ Backdrop blur │
-        │ Angle 0-360°  │  │ Intensity     │  │ Opacity       │
-        │ Rotation      │  │ Pulse anim    │  │ Tint color    │
-        └───────────────┘  └───────────────┘  └───────────────┘
-```
-
-### Spring Physics Animation System (NEW!)
-
-Professional-grade spring physics for natural, organic motion. Spring-based animations feel more alive than traditional easing curves.
-
-| Preset | Feel | Best For |
-|--------|------|----------|
-| **Smooth** | Controlled, professional | General UI, most animations |
-| **Snappy** | Quick, responsive | Buttons, micro-interactions |
-| **Heavy** | Slow, deliberate | Hero transitions, cinematic |
-| **Bouncy** | Playful, energetic | Celebrations, emphasis |
-| **Gentle** | Soft, elegant | Subtle movements, backgrounds |
-| **Wobbly** | Extreme overshoot | Attention-grabbing, fun effects |
-
-```typescript
-// AI Tool: add_keyframes with spring physics
-add_keyframes({
-  trackId: 'text-1',
-  itemId: 'title',
-  keyframes: [
-    { frame: 0, values: { opacity: 0, scale: 0.8 } },
-    {
-      frame: 30,
-      values: { opacity: 1, scale: 1 },
-      springPreset: 'bouncy'  // Natural bounce-in effect
-    }
-  ]
-});
-
-// Custom spring config for fine-tuned control
-add_keyframes({
-  keyframes: [{
-    frame: 30,
-    values: { positionY: 0.5 },
-    springConfig: {
-      mass: 1.5,      // Heavier feel
-      stiffness: 200, // Faster snap
-      damping: 15     // Some bounce
-    }
-  }]
-});
-```
-
-### Word-by-Word Text Animation (NEW!)
-
-Animate text word-by-word for more readable, impactful reveals. Perfect for sentences and longer text blocks.
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Letter** | Animate each character | Short titles, logos |
-| **Word** | Animate each word as a unit | Sentences, taglines, descriptions |
-
-```typescript
-// AI Tool: add_text_overlay with word animation
-add_text_overlay({
-  text: "Build videos from your React components",
-  letterAnimation: true,
-  letterAnimationMode: 'word',       // Animate word-by-word
-  letterAnimationType: 'slide-up',   // Each word slides up
-  letterStagger: 4,                  // 4 frames between words
-  letterDuration: 12,                // Each word takes 12 frames
-  letterEasing: 'spring'             // Natural spring motion
-});
-```
+- **Animated Gradients**: Linear, radial, conic gradients with rotation animation
+- **Text Effects**: Gradient fill, glow, and glass effects for text
+- **Spring Physics**: 6 presets (smooth, snappy, heavy, bouncy, gentle, wobbly)
+- **Word-by-Word Animation**: Animate text letter-by-letter or word-by-word
 
 ---
 
-## Innovation & Wow Factor
-
-### First-of-its-Kind Solution
-
-No existing tool combines:
-1. **Automatic component discovery** from any GitHub repo
-2. **AI-powered video generation** with multi-agent orchestration
-3. **Real browser rendering** for pixel-perfect accuracy
-4. **Auto-updating videos** that sync with your codebase
-5. **Iterative AI refinement** through conversational chat
-
-### Research-Inspired Architecture
-
-The multi-agent system draws from cutting-edge research:
-- **MovieAgent** (2024): Hierarchical planning for video generation
-- **UniVA** (2024): Multi-modal understanding for composition
-
-### Novel Technical Approaches
-
-**1. Server Component Detection & Transformation**
-
-190+ regex patterns detect server-only code across 10 categories:
-- **Async patterns:** `async function`, `await` calls
-- **Database ORMs:** Prisma, Drizzle, Mongoose, Supabase, Convex, Firebase
-- **Auth libraries:** NextAuth, Clerk, Lucia, Kinde, Stytch
-- **Node.js built-ins:** fs, path, crypto, child_process
-- **Next.js server APIs:** cookies(), headers(), redirect()
-- **Next.js 15:** Promise-based params/searchParams
-
-Gemini transforms detected components → client-safe equivalents with realistic mock data.
-
-**2. Interactive Element Discovery**
-```typescript
-// Extracts clickable/typeable elements for cursor animations
-const interactiveElements = parseHTML(previewHtml)
-  .querySelectorAll('button, input, a, [role="button"]')
-  .map(el => ({
-    selector: generateSelector(el),
-    type: el.tagName.toLowerCase(),
-    label: el.textContent || el.getAttribute('placeholder')
-  }));
-```
-
-**3. Playwright-Powered Rendering Pipeline**
-```
-Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (Gemini)
-     ↓
-  95% accuracy vs 40-60% with SSR-only
-```
-
-### Competitive Landscape
+## Competitive Landscape
 
 | Feature | Scenery | Remotion | Storybook | Arcade | Synthesia |
 |---------|:-------:|:--------:|:---------:|:------:|:---------:|
@@ -758,57 +475,6 @@ Bundle (esbuild) → Chromium (Playwright) → Extract HTML → Convert Styles (
 | **React-Specific** | ✅ | ✅ | ✅ | ❌ | ❌ |
 
 **Key insight:** Existing tools make you choose between automated video (Synthesia), component docs (Storybook), or code-based video (Remotion). Scenery combines all three with AI orchestration and auto-updating capability.
-
----
-
-## Potential Impact
-
-### The Problem (Quantified)
-
-| Metric | Current State |
-|--------|---------------|
-| Component libraries without video content | **~95%** |
-| Average time to create 1 product video manually | **4-8 hours** |
-| Developers comfortable with video editing tools | **<10%** |
-| Open-source projects with marketing budget | **<5%** |
-
-### Market Opportunity
-
-**Primary Users:**
-- Open-source maintainers (1M+ on GitHub)
-- Design system teams at enterprises
-- Component library vendors (Radix, shadcn, Chakra)
-- Developer advocates creating tutorials
-
-**Secondary Users:**
-- Marketing teams needing product demos
-- Documentation writers
-- Developer educators
-
-### Real-World Impact
-
-1. **Democratizes Video Marketing**
-   - Open-source projects can compete with commercial alternatives
-   - No video editing skills required
-
-2. **Saves Developer Time**
-   - 4-8 hours → 5 minutes per video
-   - Focus on building, not recording
-
-3. **Increases Library Adoption**
-   - Video content drives 2-3x more engagement than static docs
-   - Interactive demos reduce onboarding friction
-
-### Efficiency Metrics
-
-| Task | Before Scenery | With Scenery |
-|------|---------------|--------------|
-| Create product video | 4-8 hours | 2-5 minutes |
-| Update video for new version | 2-4 hours | **Automatic** (code-connected) |
-| Refine video timing/pacing | Start over or manual edit | Chat with AI, iterate instantly |
-| Add voiceover narration | 1-2 hours + recording | Automatic TTS |
-| Create cursor interactions | Manual frame-by-frame | AI-generated |
-| Keep docs videos current | Manual process, often neglected | **Always in sync** with repo |
 
 ---
 
@@ -937,38 +603,6 @@ const MyVideo: React.FC = () => {
 };
 ```
 
-### Deployment Commands
-
-```bash
-# Deploy main app to Fly.io
-fly deploy
-
-# Deploy Playwright worker
-cd playwright-worker && fly deploy
-
-# Deploy Remotion bundle to S3
-npm run deploy:remotion
-
-# Deploy new Lambda function (with increased timeout)
-npx remotion lambda functions deploy --memory=2048 --disk=2048 --timeout=900
-```
-
-### Environment Variables
-
-```bash
-# Fly.io Secrets (Main App)
-GEMINI_API_KEY=...
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-REMOTION_AWS_REGION=us-east-1
-REMOTION_AWS_ACCESS_KEY_ID=...
-REMOTION_AWS_SECRET_ACCESS_KEY=...
-REMOTION_SERVE_URL=https://...s3.amazonaws.com/sites/scenery/index.html
-REMOTION_LAMBDA_FUNCTION_NAME=remotion-render-4-0-409-mem2048mb-disk2048mb-900sec
-PLAYWRIGHT_WORKER_URL=https://scenery-playwright.fly.dev
-PLAYWRIGHT_WORKER_SECRET=...
-```
-
 ---
 
 ## Quick Start
@@ -997,29 +631,6 @@ npm run dev
 |----------|-----|
 | **Live Demo** | [scenery-gemini3.fly.dev](https://scenery-gemini3.fly.dev) |
 | **Source Code** | [github.com/Arty2001/scenery-gemini3-hackathon](https://github.com/Arty2001/scenery-gemini3-hackathon) |
-
----
-
-## Gemini Integration Summary
-
-*For Devpost (~200 words):*
-
-Scenery uses **Gemini 3 Pro across 7 distinct integrations** that form the core of every feature:
-
-**Component Discovery:** (1) Structured JSON for categorization, (2) 3-tier props generation (Storybook extraction → AI-generated → defaults), (3) **Server Component transformation**—190+ patterns detect async/await, Prisma, NextAuth, etc., then Gemini transforms to client-safe code, (4) Tailwind→inline CSS conversion, (5) AI fallback preview with thinking mode.
-
-**Video Generation:** (6) Multi-agent orchestration (4 stages)—Director plans narrative, Scene Planner designs spring-based animations and cursor interactions, Assembly Agent builds tracks, Refinement Agent scores 0-100 and iterates. (7) Gemini 2.5 Flash TTS with 5 voice options.
-
-**Professional Editor:** Timeline-based editing with particle effects (6 types), device frame mockups, shape/SVG elements, keyframe animations, and real-time auto-save.
-
-**Key Differentiators:**
-- **Videos auto-update** when repos sync—no stale documentation
-- **AI chat refinement** solves the "last 10%" problem
-- **Storybook integration** uses author-defined props, not AI guesses
-
-**Gemini 3 Features Used:** Structured output (100% parse reliability), function calling (15+ tools), long context, streaming, thinking mode, TTS.
-
-No other tool combines automatic component discovery, AI video generation, and code-connected auto-updating.
 
 ---
 
