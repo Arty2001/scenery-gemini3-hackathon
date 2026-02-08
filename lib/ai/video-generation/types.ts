@@ -256,6 +256,9 @@ export interface AgentContext {
 
   /** Available uploaded assets (images, videos, audio) */
   availableAssets?: AvailableAsset[];
+
+  /** AI model to use for generation (e.g., gemini-3-pro-preview) */
+  modelId?: string;
 }
 
 export interface AvailableAsset {

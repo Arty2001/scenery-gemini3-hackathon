@@ -1,4 +1,5 @@
 import { getAIClient } from '@/lib/ai/client';
+import { DEFAULT_MODEL, getModelIdOrDefault, type GeminiModelId } from '@/lib/ai/models';
 import {
   categorySchema,
   demoPropsSchema,
@@ -13,6 +14,17 @@ import type { ComponentInfo, PropInfo, RepoContext } from './types';
 import { extractInteractiveElements } from './extract-interactive-elements';
 import { generateHybridPreviewHtml } from './ssr-preview';
 import { extractStorybookArgs } from './storybook-extractor';
+
+/**
+ * Get AI model to use for this operation.
+ * Uses project's configured model if available, otherwise falls back to default.
+ */
+function getModelForContext(repoContext?: RepoContext): GeminiModelId {
+  if (repoContext?.aiModel) {
+    return getModelIdOrDefault(repoContext.aiModel);
+  }
+  return DEFAULT_MODEL;
+}
 
 function formatPropsForPrompt(props: PropInfo[]): string {
   if (props.length === 0) return 'No props defined';
@@ -36,7 +48,7 @@ export async function categorizeComponent(
     try {
       const ai = getAIClient();
 
-      const prompt = `Categorize this React UI component.
+      const prompt = `Categorize this React UI component for VIDEO SHOWCASE purposes.
 
 Repository: ${repoContext.owner}/${repoContext.name}
 Component name: ${component.componentName}
@@ -46,11 +58,35 @@ ${formatPropsForPrompt(component.props)}
 
 Available categories: ${COMPONENT_CATEGORIES.join(', ')}
 
-Analyze the component name, props, and context to determine its UI category.
-Choose the most specific category that applies.`;
+## Your Task
+
+Analyze the component and determine:
+
+1. **Primary category** — The most specific UI category that applies.
+
+2. **Video role** — How should this component be featured in a demo video?
+   - "hero": Full-screen showcase, main attraction (dashboards, hero sections, full layouts)
+   - "supporting": Shown in context with other elements (cards, modals, forms)
+   - "detail": Close-up feature highlight (buttons, inputs, small widgets)
+
+3. **Suggested duration** — How many frames of screen time (30 frames = 1 second)?
+   - Heavy components (layouts, dashboards): 180-360 frames (6-12s)
+   - Medium components (cards, forms, modals): 120-180 frames (4-6s)
+   - Light components (buttons, inputs): 60-120 frames (2-4s)
+
+4. **Device frame** — Which frame displays this component best?
+   - "laptop": Wide layouts, dashboards, tables (1280px+ width)
+   - "phone": Mobile UIs, forms, cards (375px width)
+   - "tablet": Medium layouts (768px width)
+   - "none": Full-bleed backgrounds, hero sections
+
+5. **Visual weight** — How visually prominent is this component?
+   - "heavy": Full-page layouts, complex dashboards
+   - "medium": Cards, modals, forms, nav bars
+   - "light": Buttons, inputs, badges, icons`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: getModelForContext(repoContext),
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -110,7 +146,7 @@ export async function generateDemoProps(
     try {
       const ai = getAIClient();
 
-      const prompt = `Generate realistic demo props for a React component.
+      const prompt = `Generate STORYTELLING demo props for a React component in a VIDEO DEMO.
 
 Repository: ${repoContext.owner}/${repoContext.name}
 Component: ${component.componentName}
@@ -119,18 +155,52 @@ ${component.category ? `Category: ${component.category}` : ''}
 Props interface:
 ${formatPropsForPrompt(component.props)}
 
-Requirements:
-- Generate props that produce a production-quality preview
-- Use the repository name for brand context (e.g., if repo is 'acme-ui', use 'Acme' in text)
-- For strings: use realistic content, not "lorem ipsum" or "foo/bar"
-- For numbers: use sensible defaults
-- For functions: use null (will be mocked in sandbox)
-- For complex objects: provide minimal valid structure
-- Only include required props and commonly-used optional ones
-- IMPORTANT: For conditionally-rendered components (Modal, Dialog, Drawer, Popover, Tooltip, Sheet, Dropdown, Menu, Alert, Toast), always set open/isOpen/visible/show to true so content renders`;
+## Requirements
+
+### Props Should Tell a STORY
+- DON'T use generic placeholders ("John Doe", "lorem ipsum", "test@example.com")
+- DO use realistic, contextual content that shows the component's purpose:
+  - Checkout form: "MacBook Pro 14-inch", "$1,999.00", "123 Tech Lane, San Francisco, CA"
+  - User profile: "Sarah Chen", "Senior Product Designer", avatar URL
+  - Dashboard: Real-looking metrics with trends ("+12.5% vs last month")
+  - Chat: Realistic conversation snippets
+
+### Brand Context
+- Use "${repoContext.name}" as the brand name in UI text
+- Match the visual style (if repo is "acme-ui", use "Acme" in labels)
+
+### Stateful Components
+- For components with multiple states (tabs, accordions, steppers):
+  - Pick the MOST VISUALLY INTERESTING state to show
+  - Set activeTab/activeStep/selectedIndex to that value
+  - Explain in suggestedState WHY you chose that state
+
+### Visibility Props (CRITICAL)
+- Modal, Dialog, Sheet, Drawer, Popover, Tooltip, Dropdown, Menu, Alert, Toast:
+  - ALWAYS set open/isOpen/visible/show to TRUE
+  - Component won't render content otherwise
+
+### Interactive Elements (for cursor tutorials)
+- Identify clickable/hoverable/typeable elements the cursor can target
+- Provide CSS selectors that work on the rendered HTML
+- Examples:
+  - Button: { selector: "button[type='submit']", action: "click", description: "Submit form" }
+  - Input: { selector: "input[name='email']", action: "type", description: "Email field", sampleValue: "demo@${repoContext.name}.com" }
+  - Link: { selector: "a[href='/dashboard']", action: "click", description: "Navigate to dashboard" }
+
+### Data Types
+- Strings: Realistic content matching context
+- Numbers: Sensible defaults (not 0 or 1)
+- Functions: null (mocked in sandbox)
+- Arrays: 2-4 items with varied realistic data
+- Objects: Minimal valid structure with realistic values
+
+### Theme Support
+- If component has theme/colorScheme/mode prop, include it
+- Prefer "light" unless component looks better in dark mode`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: getModelForContext(repoContext),
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -304,7 +374,7 @@ For cursor targeting in video tutorials, you MUST use semantic HTML:
 Return ONLY the HTML. No markdown, no explanation, no code fences. Just raw HTML starting with <div style="..."> and ending with </div>.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: getModelForContext(repoContext),
       contents: prompt,
       config: {
         thinkingConfig: {

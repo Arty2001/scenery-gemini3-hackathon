@@ -114,6 +114,7 @@ export type Database = {
           category: string | null
           category_confidence: number | null
           component_name: string
+          content_hash: string | null
           created_at: string | null
           demo_props: Json | null
           demo_props_confidence: string | null
@@ -138,6 +139,7 @@ export type Database = {
           category?: string | null
           category_confidence?: number | null
           component_name: string
+          content_hash?: string | null
           created_at?: string | null
           demo_props?: Json | null
           demo_props_confidence?: string | null
@@ -162,6 +164,7 @@ export type Database = {
           category?: string | null
           category_confidence?: number | null
           component_name?: string
+          content_hash?: string | null
           created_at?: string | null
           demo_props?: Json | null
           demo_props_confidence?: string | null
@@ -262,6 +265,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          ai_model: string | null
           created_at: string | null
           description: string | null
           id: string
@@ -273,6 +277,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_model?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -284,6 +289,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_model?: string | null
           created_at?: string | null
           description?: string | null
           id?: string

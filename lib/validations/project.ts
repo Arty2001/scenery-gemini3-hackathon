@@ -1,5 +1,13 @@
 import { z } from 'zod'
 
+// Valid Gemini model IDs (pro is default/first)
+export const VALID_AI_MODELS = [
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
+] as const
+
+export type AIModelId = typeof VALID_AI_MODELS[number]
+
 export const projectSchema = z.object({
   name: z
     .string()
@@ -16,6 +24,10 @@ export const projectSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal('')),
+  ai_model: z
+    .enum(VALID_AI_MODELS)
+    .optional()
+    .nullable(),
 })
 
 export type ProjectInput = z.infer<typeof projectSchema>

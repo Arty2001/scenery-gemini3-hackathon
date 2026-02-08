@@ -146,6 +146,33 @@ function resolveAlias(
  */
 function createInlineMocks(): string {
   return `
+// Define __makeSafeProps__ if not already defined by the HTML template
+// This is a fallback in case the first script block fails
+if (typeof window.__makeSafeProps__ !== 'function') {
+  window.__makeSafeProps__ = function(props) {
+    if (!props || typeof props !== 'object') return {};
+    // Simple safe props wrapper - returns empty defaults for undefined values
+    return new Proxy(props, {
+      get: function(target, prop) {
+        var value = target[prop];
+        if (value === undefined || value === null) {
+          var propLower = String(prop).toLowerCase();
+          // Array-like props
+          if (propLower.endsWith('s') || propLower.endsWith('list') || propLower.endsWith('items') || propLower.endsWith('data')) return [];
+          // Callback props
+          if (String(prop).startsWith('on') || String(prop).startsWith('handle')) return function() {};
+          // Boolean props
+          if (String(prop).startsWith('is') || String(prop).startsWith('has') || String(prop).startsWith('show')) return false;
+          // Default to empty object
+          return {};
+        }
+        return value;
+      }
+    });
+  };
+  console.log('[bundle] Defined fallback __makeSafeProps__');
+}
+
 // Inline mocks for common dependencies
 const __mocks__ = {
   // clsx/tailwind-merge - simple class joining
@@ -174,21 +201,24 @@ const __mocks__ = {
 };
 
 // Lucide React icons - generate SVG components
+// Use window.React to ensure it's available from CDN
 const createIcon = (name) => {
   return function LucideIcon(props) {
-    return React.createElement('svg', {
+    const R = window.React;
+    if (!R) { console.error('[createIcon] window.React not available!'); return null; }
+    return R.createElement('svg', {
       xmlns: 'http://www.w3.org/2000/svg',
-      width: props.size || 24,
-      height: props.size || 24,
+      width: props?.size || 24,
+      height: props?.size || 24,
       viewBox: '0 0 24 24',
       fill: 'none',
       stroke: 'currentColor',
-      strokeWidth: props.strokeWidth || 2,
+      strokeWidth: props?.strokeWidth || 2,
       strokeLinecap: 'round',
       strokeLinejoin: 'round',
-      className: props.className,
+      className: props?.className,
       'data-icon': name.toLowerCase(),
-    }, React.createElement('circle', { cx: 12, cy: 12, r: 10 }));
+    }, R.createElement('circle', { cx: 12, cy: 12, r: 10 }));
   };
 };
 
@@ -200,7 +230,9 @@ const lucideReact = new Proxy({}, {
 const motion = new Proxy({}, {
   get: (_, tag) => {
     return function MotionComponent(props) {
-      const { children, ...rest } = props;
+      const R = window.React;
+      if (!R) return null;
+      const { children, ...rest } = props || {};
       // Filter out motion-specific props
       const htmlProps = {};
       for (const [key, value] of Object.entries(rest)) {
@@ -216,7 +248,7 @@ const motion = new Proxy({}, {
           htmlProps[key] = value;
         }
       }
-      return React.createElement(String(tag), htmlProps, children);
+      return R.createElement(String(tag), htmlProps, children);
     };
   }
 });
@@ -232,24 +264,28 @@ const framerMotion = {
   useInView: () => true,
 };
 
-// Next.js components
+// Next.js components - use window.React to ensure availability
 const nextImage = function NextImage(props) {
-  return React.createElement('img', {
-    src: props.src,
-    alt: props.alt || '',
-    width: props.width,
-    height: props.height,
-    className: props.className,
-    style: props.style,
+  const R = window.React;
+  if (!R) { console.error('[nextImage] window.React not available!'); return null; }
+  return R.createElement('img', {
+    src: props?.src,
+    alt: props?.alt || '',
+    width: props?.width,
+    height: props?.height,
+    className: props?.className,
+    style: props?.style,
   });
 };
 
 const nextLink = function NextLink(props) {
-  return React.createElement('a', {
-    href: props.href,
-    className: props.className,
-    style: props.style,
-  }, props.children);
+  const R = window.React;
+  if (!R) { console.error('[nextLink] window.React not available!'); return null; }
+  return R.createElement('a', {
+    href: props?.href,
+    className: props?.className,
+    style: props?.style,
+  }, props?.children);
 };
 
 // Next.js fonts - return objects with className and variable for CSS custom properties
@@ -276,8 +312,10 @@ const nextFontLocal = createFontMock('LocalFont');
 // Radix UI - render as divs with data attributes
 const createRadixComponent = (name) => {
   return function RadixComponent(props) {
-    const { children, asChild, ...rest } = props;
-    return React.createElement('div', {
+    const R = window.React;
+    if (!R) return null;
+    const { children, asChild, ...rest } = props || {};
+    return R.createElement('div', {
       'data-radix': name.toLowerCase(),
       ...rest,
     }, children);
@@ -311,8 +349,9 @@ const reactHookForm = {
   FormProvider: ({ children }) => children,
   useFormContext: () => {
     // Use shared form context if available
-    if (typeof window !== 'undefined' && window.__FORM_CONTEXT__ && typeof React !== 'undefined') {
-      try { return React.useContext(window.__FORM_CONTEXT__); } catch (e) {}
+    const R = window.React;
+    if (typeof window !== 'undefined' && window.__FORM_CONTEXT__ && R) {
+      try { return R.useContext(window.__FORM_CONTEXT__); } catch (e) {}
     }
     return reactHookForm.useForm();
   },
@@ -360,8 +399,9 @@ const reactQuery = {
   useQuery: () => ({ data: null, isLoading: false, error: null, refetch: () => {}, isFetching: false, isSuccess: true }),
   useMutation: () => ({ mutate: () => {}, mutateAsync: async () => {}, isLoading: false, isPending: false }),
   useQueryClient: () => {
-    if (typeof window !== 'undefined' && window.__QUERY_CONTEXT__ && typeof React !== 'undefined') {
-      try { return React.useContext(window.__QUERY_CONTEXT__); } catch (e) {}
+    const R = window.React;
+    if (typeof window !== 'undefined' && window.__QUERY_CONTEXT__ && R) {
+      try { return R.useContext(window.__QUERY_CONTEXT__); } catch (e) {}
     }
     return { invalidateQueries: () => {}, refetchQueries: () => {}, getQueryData: () => null };
   },
@@ -372,17 +412,18 @@ const reactQuery = {
 // Auth mocks - uses shared __AUTH_CONTEXT__ if available
 const authMock = {
   useAuth: () => {
-    if (typeof window !== 'undefined' && window.__AUTH_CONTEXT__ && typeof React !== 'undefined') {
-      try { return React.useContext(window.__AUTH_CONTEXT__); } catch (e) {}
+    const R = window.React;
+    if (typeof window !== 'undefined' && window.__AUTH_CONTEXT__ && R) {
+      try { return R.useContext(window.__AUTH_CONTEXT__); } catch (e) {}
     }
     return { user: { id: '1', email: 'demo@example.com', name: 'Demo User' }, isAuthenticated: true, isLoading: false };
   },
   useUser: () => ({ id: '1', email: 'demo@example.com', name: 'Demo User' }),
   useSession: () => ({ data: { user: { id: '1', email: 'demo@example.com', name: 'Demo User' } }, status: 'authenticated' }),
   useClerk: () => ({ user: { id: '1', email: 'demo@example.com' }, signOut: () => {} }),
-  SignIn: () => React.createElement('div', { 'data-clerk': 'sign-in' }, 'Sign In'),
-  SignUp: () => React.createElement('div', { 'data-clerk': 'sign-up' }, 'Sign Up'),
-  UserButton: () => React.createElement('div', { 'data-clerk': 'user-button' }, 'User'),
+  SignIn: () => { const R = window.React; return R ? R.createElement('div', { 'data-clerk': 'sign-in' }, 'Sign In') : null; },
+  SignUp: () => { const R = window.React; return R ? R.createElement('div', { 'data-clerk': 'sign-up' }, 'Sign Up') : null; },
+  UserButton: () => { const R = window.React; return R ? R.createElement('div', { 'data-clerk': 'user-button' }, 'User') : null; },
   SignedIn: ({ children }) => children,
   SignedOut: ({ children }) => children,
 };
@@ -390,8 +431,9 @@ const authMock = {
 // Toast mocks - uses shared __TOAST_CONTEXT__ if available
 const toastMock = {
   useToast: () => {
-    if (typeof window !== 'undefined' && window.__TOAST_CONTEXT__ && typeof React !== 'undefined') {
-      try { return React.useContext(window.__TOAST_CONTEXT__); } catch (e) {}
+    const R = window.React;
+    if (typeof window !== 'undefined' && window.__TOAST_CONTEXT__ && R) {
+      try { return R.useContext(window.__TOAST_CONTEXT__); } catch (e) {}
     }
     return { toast: () => '1', toasts: [], dismiss: () => {} };
   },
@@ -401,9 +443,10 @@ const toastMock = {
 // i18n mocks - uses shared __I18N_CONTEXT__ if available
 const i18nMock = {
   useTranslation: () => {
-    if (typeof window !== 'undefined' && window.__I18N_CONTEXT__ && typeof React !== 'undefined') {
+    const R = window.React;
+    if (typeof window !== 'undefined' && window.__I18N_CONTEXT__ && R) {
       try {
-        const ctx = React.useContext(window.__I18N_CONTEXT__);
+        const ctx = R.useContext(window.__I18N_CONTEXT__);
         return { t: ctx.t || ((k) => k), i18n: ctx.i18n || { language: 'en' } };
       } catch (e) {}
     }
@@ -414,8 +457,10 @@ const i18nMock = {
 };
 
 // Recharts mock (charting library)
-const rechartsComponent = ({ children, ...props }) =>
-  React.createElement('div', { 'data-recharts': 'chart', ...props }, children);
+const rechartsComponent = ({ children, ...props }) => {
+  const R = window.React;
+  return R ? R.createElement('div', { 'data-recharts': 'chart', ...props }, children) : null;
+};
 
 const recharts = {
   ResponsiveContainer: rechartsComponent,
@@ -436,9 +481,12 @@ const recharts = {
 };
 
 // Headless UI mock
-const headlessUIComponent = ({ children, ...props }) =>
-  React.createElement('div', { 'data-headlessui': 'component', ...props },
+const headlessUIComponent = ({ children, ...props }) => {
+  const R = window.React;
+  if (!R) return null;
+  return R.createElement('div', { 'data-headlessui': 'component', ...props },
     typeof children === 'function' ? children({ open: true, selected: false }) : children);
+};
 
 const headlessUI = {
   Dialog: headlessUIComponent,
@@ -455,7 +503,7 @@ const headlessUI = {
   Tab: headlessUIComponent,
   Disclosure: headlessUIComponent,
   Transition: ({ children }) => children,
-  Fragment: React.Fragment,
+  Fragment: (typeof window !== 'undefined' && window.React) ? window.React.Fragment : ({ children }) => children,
 };
 
 // React Spring mock
@@ -465,7 +513,10 @@ const reactSpring = {
   useTrail: () => [[], () => {}],
   useTransition: () => [],
   animated: new Proxy({}, {
-    get: (_, tag) => (props) => React.createElement(String(tag), props)
+    get: (_, tag) => (props) => {
+      const R = window.React;
+      return R ? R.createElement(String(tag), props) : null;
+    }
   }),
   config: { default: {}, gentle: {}, stiff: {}, wobbly: {} },
 };
@@ -473,17 +524,22 @@ const reactSpring = {
 // Sonner/toast mock
 const sonner = {
   toast: () => {},
-  Toaster: () => React.createElement('div', { 'data-sonner': 'toaster' }),
+  Toaster: () => { const R = window.React; return R ? R.createElement('div', { 'data-sonner': 'toaster' }) : null; },
 };
 
 // React Hot Toast mock
 const reactHotToast = {
   default: () => {},
   toast: () => {},
-  Toaster: () => React.createElement('div', { 'data-hot-toast': 'toaster' }),
+  Toaster: () => { const R = window.React; return R ? R.createElement('div', { 'data-hot-toast': 'toaster' }) : null; },
 };
 
 // Export mocks for use in bundle
+// Verify React is available before setting up mocks
+if (!window.React) {
+  console.error('[mocks] CRITICAL: window.React is not available! Mocks that render elements will fail.');
+}
+
 window.__SCENERY_MOCKS__ = {
   ...(__mocks__),
   'lucide-react': lucideReact,
@@ -493,8 +549,9 @@ window.__SCENERY_MOCKS__ = {
   'next/navigation': {
     useRouter: () => {
       // Use shared router context if available
-      if (typeof window !== 'undefined' && window.__ROUTER_CONTEXT__ && typeof React !== 'undefined') {
-        try { return React.useContext(window.__ROUTER_CONTEXT__); } catch (e) {}
+      const R = window.React;
+      if (typeof window !== 'undefined' && window.__ROUTER_CONTEXT__ && R) {
+        try { return R.useContext(window.__ROUTER_CONTEXT__); } catch (e) {}
       }
       return { push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, prefetch: () => {}, refresh: () => {} };
     },
@@ -506,8 +563,9 @@ window.__SCENERY_MOCKS__ = {
   },
   'next/router': {
     useRouter: () => {
-      if (typeof window !== 'undefined' && window.__ROUTER_CONTEXT__ && typeof React !== 'undefined') {
-        try { return React.useContext(window.__ROUTER_CONTEXT__); } catch (e) {}
+      const R = window.React;
+      if (typeof window !== 'undefined' && window.__ROUTER_CONTEXT__ && R) {
+        try { return R.useContext(window.__ROUTER_CONTEXT__); } catch (e) {}
       }
       return { push: () => {}, replace: () => {}, pathname: '/', query: {}, asPath: '/', events: { on: () => {}, off: () => {} } };
     },
@@ -664,14 +722,14 @@ window.__SCENERY_MOCKS__ = {
 
   // React Three Fiber (3D) - stub that doesn't render anything
   '@react-three/fiber': {
-    Canvas: ({ children }) => React.createElement('div', { 'data-r3f': 'canvas' }, 'WebGL not supported in preview'),
+    Canvas: ({ children }) => { const R = window.React; return R ? R.createElement('div', { 'data-r3f': 'canvas' }, 'WebGL not supported in preview') : null; },
     useFrame: () => {},
     useThree: () => ({ camera: {}, scene: {}, gl: {}, size: { width: 100, height: 100 } }),
     useLoader: () => null,
     extend: () => {},
   },
   '@react-three/drei': new Proxy({}, {
-    get: (_, name) => (props) => React.createElement('div', { 'data-drei': String(name).toLowerCase() })
+    get: (_, name) => (props) => { const R = window.React; return R ? R.createElement('div', { 'data-drei': String(name).toLowerCase() }) : null; }
   }),
 
   // Remotion (video) - stub
@@ -680,10 +738,10 @@ window.__SCENERY_MOCKS__ = {
     useVideoConfig: () => ({ width: 1920, height: 1080, fps: 30, durationInFrames: 300 }),
     Composition: () => null,
     Sequence: ({ children }) => children,
-    AbsoluteFill: ({ children, ...props }) => React.createElement('div', { style: { position: 'absolute', inset: 0 }, ...props }, children),
+    AbsoluteFill: ({ children, ...props }) => { const R = window.React; return R ? R.createElement('div', { style: { position: 'absolute', inset: 0 }, ...props }, children) : null; },
     Audio: () => null,
     Video: () => null,
-    Img: (props) => React.createElement('img', props),
+    Img: (props) => { const R = window.React; return R ? R.createElement('img', props) : null; },
     spring: () => 0,
     interpolate: () => 0,
     continueRender: () => {},
@@ -706,8 +764,8 @@ window.__SCENERY_MOCKS__ = {
       isValid: true,
     }),
     Formik: ({ children }) => typeof children === 'function' ? children({}) : children,
-    Form: ({ children }) => React.createElement('form', null, children),
-    Field: (props) => React.createElement('input', props),
+    Form: ({ children }) => { const R = window.React; return R ? R.createElement('form', null, children) : null; },
+    Field: (props) => { const R = window.React; return R ? R.createElement('input', props) : null; },
     ErrorMessage: () => null,
   },
 
@@ -724,36 +782,36 @@ window.__SCENERY_MOCKS__ = {
 
   // Swiper
   'swiper/react': {
-    Swiper: ({ children }) => React.createElement('div', { 'data-swiper': 'container' }, children),
-    SwiperSlide: ({ children }) => React.createElement('div', { 'data-swiper': 'slide' }, children),
+    Swiper: ({ children }) => { const R = window.React; return R ? R.createElement('div', { 'data-swiper': 'container' }, children) : null; },
+    SwiperSlide: ({ children }) => { const R = window.React; return R ? R.createElement('div', { 'data-swiper': 'slide' }, children) : null; },
     useSwiper: () => ({ slidePrev: () => {}, slideNext: () => {}, slideTo: () => {} }),
   },
 
   // React Player
   'react-player': {
-    default: () => React.createElement('div', { 'data-player': 'video' }, 'Video Player'),
+    default: () => { const R = window.React; return R ? R.createElement('div', { 'data-player': 'video' }, 'Video Player') : null; },
   },
 
   // React PDF
   '@react-pdf/renderer': {
     Document: ({ children }) => children,
     Page: ({ children }) => children,
-    View: ({ children }) => React.createElement('div', null, children),
-    Text: ({ children }) => React.createElement('span', null, children),
-    Image: (props) => React.createElement('img', props),
+    View: ({ children }) => { const R = window.React; return R ? R.createElement('div', null, children) : null; },
+    Text: ({ children }) => { const R = window.React; return R ? R.createElement('span', null, children) : null; },
+    Image: (props) => { const R = window.React; return R ? R.createElement('img', props) : null; },
     StyleSheet: { create: (styles) => styles },
     PDFViewer: ({ children }) => children,
   },
 
   // React Markdown
   'react-markdown': {
-    default: ({ children }) => React.createElement('div', { 'data-markdown': true }, children),
+    default: ({ children }) => { const R = window.React; return R ? R.createElement('div', { 'data-markdown': true }, children) : null; },
   },
 
   // Highlight.js / Prism
   'react-syntax-highlighter': {
-    Prism: ({ children }) => React.createElement('pre', null, React.createElement('code', null, children)),
-    Light: ({ children }) => React.createElement('pre', null, React.createElement('code', null, children)),
+    Prism: ({ children }) => { const R = window.React; return R ? R.createElement('pre', null, R.createElement('code', null, children)) : null; },
+    Light: ({ children }) => { const R = window.React; return R ? R.createElement('pre', null, R.createElement('code', null, children)) : null; },
   },
   'react-syntax-highlighter/dist/esm/styles/prism': new Proxy({}, { get: () => ({}) }),
   'react-syntax-highlighter/dist/esm/styles/hljs': new Proxy({}, { get: () => ({}) }),
@@ -763,9 +821,10 @@ window.__SCENERY_MOCKS__ = {
 const nextThemes = {
   useTheme: () => {
     // Try to use the global ThemeContext from html-template if available
-    if (typeof window !== 'undefined' && window.__THEME_CONTEXT__ && typeof React !== 'undefined') {
+    const R = window.React;
+    if (typeof window !== 'undefined' && window.__THEME_CONTEXT__ && R) {
       try {
-        return React.useContext(window.__THEME_CONTEXT__);
+        return R.useContext(window.__THEME_CONTEXT__);
       } catch (e) {
         // Fallback if useContext fails (called outside render)
       }
@@ -1010,40 +1069,195 @@ console.log('[bundle] Set window.__SCENERY_COMPONENT__:', typeof window.__SCENER
 
             build.onLoad({ filter: /.*/, namespace: 'react-global' }, (args) => {
               // Provide React and ReactDOM from global scope (loaded via CDN)
-              if (args.path === 'react' || args.path === 'react/jsx-runtime' || args.path === 'react/jsx-dev-runtime') {
+              const isReactDom = args.path.startsWith('react-dom');
+
+              if (isReactDom) {
                 return {
                   contents: `
-                    const React = window.React;
-                    export default React;
-                    export const {
-                      createElement, createContext, createRef,
-                      forwardRef, memo, lazy, Suspense, Fragment,
-                      useState, useEffect, useContext, useReducer, useCallback,
-                      useMemo, useRef, useImperativeHandle, useLayoutEffect,
-                      useDebugValue, useId, useSyncExternalStore, useTransition,
-                      useDeferredValue, Children, Component, PureComponent,
-                      StrictMode, Profiler, cloneElement, isValidElement
-                    } = React;
-                    // JSX runtime exports
-                    export const jsx = React.createElement;
-                    export const jsxs = React.createElement;
-                    export const jsxDEV = React.createElement;
-                  `,
-                  loader: 'js',
-                };
-              }
-              if (args.path === 'react-dom' || args.path === 'react-dom/client') {
-                return {
-                  contents: `
-                    const ReactDOM = window.ReactDOM;
+                    var ReactDOM = window.ReactDOM;
+                    if (!ReactDOM) {
+                      console.error('[react-dom] window.ReactDOM is undefined! CDN may have failed to load.');
+                      ReactDOM = { createRoot: function() { return { render: function() {} }; } };
+                    }
                     export default ReactDOM;
-                    export const { createRoot, hydrateRoot, createPortal, flushSync, render, hydrate } = ReactDOM;
+                    export var createRoot = ReactDOM.createRoot || function() { return { render: function() {} }; };
+                    export var hydrateRoot = ReactDOM.hydrateRoot || function() { return { render: function() {} }; };
+                    export var createPortal = ReactDOM.createPortal || function(children) { return children; };
+                    export var flushSync = ReactDOM.flushSync || function(fn) { return fn(); };
+                    export var render = ReactDOM.render || function() {};
+                    export var hydrate = ReactDOM.hydrate || function() {};
                   `,
                   loader: 'js',
                 };
               }
-              // Fallback for any other react-related imports
-              return { contents: 'export default window.React;', loader: 'js' };
+
+              // For React and JSX runtime - provide robust fallbacks for all exports
+              // This handles: react, react/jsx-runtime, react/jsx-runtime.js, etc.
+              return {
+                contents: `
+                  // Get React from window - should be loaded by CDN
+                  var React = window.React;
+
+                  console.log('[react-global] React from window:', !!React, React ? 'has createElement: ' + !!React.createElement : 'N/A');
+
+                  // Fallback createElement that creates a proper React-like element with $$typeof
+                  // This is critical - React checks for $$typeof to validate elements
+                  var REACT_ELEMENT_TYPE = (typeof Symbol === 'function' && Symbol.for) ? Symbol.for('react.element') : 0xeac7;
+
+                  function fallbackCreateElement(type, props) {
+                    var children = Array.prototype.slice.call(arguments, 2);
+                    console.warn('[react-global] Using fallback createElement for:', type);
+                    // Return a proper React element shape with $$typeof
+                    return {
+                      $$typeof: REACT_ELEMENT_TYPE,
+                      type: type || 'div',
+                      key: null,
+                      ref: null,
+                      props: Object.assign({}, props || {}, children.length > 0 ? { children: children.length === 1 ? children[0] : children } : {}),
+                      _owner: null
+                    };
+                  }
+
+                  // Real createElement reference
+                  var realCreateElement = (React && React.createElement) ? React.createElement.bind(React) : fallbackCreateElement;
+
+                  // CRITICAL: Safe JSX wrapper that catches undefined element types (React #130)
+                  // JSX runtime signature: jsx(type, props, key) where children are in props.children
+                  function safeJsx(type, props, key) {
+                    // Check if type is undefined, null, or not a valid element type
+                    if (type === undefined || type === null) {
+                      console.warn('[safeJsx] Element type is undefined/null! Props:', JSON.stringify(props || {}).slice(0, 200));
+                      // Return a valid React element that renders nothing
+                      return {
+                        $$typeof: REACT_ELEMENT_TYPE,
+                        type: 'div',
+                        key: key || null,
+                        ref: null,
+                        props: { 'data-jsx-error': 'undefined-component', style: { display: 'none' } },
+                        _owner: null
+                      };
+                    }
+
+                    // Check for invalid types (not string, function, or valid React element type)
+                    var typeOf = typeof type;
+                    if (typeOf !== 'string' && typeOf !== 'function') {
+                      // Check if it's a valid React type (memo, forwardRef, etc. have $$typeof)
+                      if (typeOf === 'object' && type !== null && (type.$$typeof || type.render)) {
+                        // Valid React component type (forwardRef, memo, etc.)
+                      } else {
+                        console.warn('[safeJsx] Invalid element type:', typeOf, type);
+                        return {
+                          $$typeof: REACT_ELEMENT_TYPE,
+                          type: 'div',
+                          key: key || null,
+                          ref: null,
+                          props: { 'data-jsx-error': 'invalid-type-' + typeOf, style: { display: 'none' } },
+                          _owner: null
+                        };
+                      }
+                    }
+
+                    // Valid type - use React.createElement if available
+                    // JSX runtime passes children inside props, but createElement expects them as extra args
+                    // So we need to properly extract children from props
+                    try {
+                      if (React && React.createElement) {
+                        // Extract children from props (JSX runtime puts them there)
+                        var children = props ? props.children : undefined;
+                        var propsWithoutChildren = {};
+                        if (props) {
+                          for (var k in props) {
+                            if (k !== 'children') propsWithoutChildren[k] = props[k];
+                          }
+                        }
+                        // Add key to props if provided
+                        if (key !== undefined && key !== null) {
+                          propsWithoutChildren.key = key;
+                        }
+                        // Call createElement with proper signature
+                        if (children !== undefined) {
+                          if (Array.isArray(children)) {
+                            return React.createElement.apply(React, [type, propsWithoutChildren].concat(children));
+                          } else {
+                            return React.createElement(type, propsWithoutChildren, children);
+                          }
+                        } else {
+                          return React.createElement(type, propsWithoutChildren);
+                        }
+                      } else {
+                        // Fallback: create element manually
+                        return fallbackCreateElement(type, props);
+                      }
+                    } catch (err) {
+                      console.error('[safeJsx] createElement error for type:', type, 'error:', err.message);
+                      return {
+                        $$typeof: REACT_ELEMENT_TYPE,
+                        type: 'div',
+                        key: key || null,
+                        ref: null,
+                        props: { 'data-jsx-error': err.message, style: { display: 'none' } },
+                        _owner: null
+                      };
+                    }
+                  }
+
+                  // CRITICAL: Set on window for global access
+                  window.jsx = safeJsx;
+                  window.jsxs = safeJsx;
+                  window.jsxDEV = safeJsx;
+
+                  console.log('[react-global] safeJsx defined and set on window');
+
+                  // Export React default
+                  export default React || {};
+
+                  // Explicit named exports with fallbacks (avoid destructuring undefined)
+                  // Use safeJsx for createElement to catch undefined types everywhere
+                  export var createElement = safeJsx;
+                  export var createContext = (React && React.createContext) || function(defaultValue) { return { Provider: function(p) { return p.children; }, Consumer: function(p) { return p.children; }, _currentValue: defaultValue }; };
+                  export var createRef = (React && React.createRef) || function() { return { current: null }; };
+                  export var forwardRef = (React && React.forwardRef) || function(render) { return render; };
+                  export var memo = (React && React.memo) || function(component) { return component; };
+                  export var lazy = (React && React.lazy) || function(factory) { return factory; };
+                  export var Suspense = (React && React.Suspense) || function(props) { return props.children; };
+                  export var Fragment = (React && React.Fragment) || 'div';
+
+                  // Hooks with fallbacks
+                  export var useState = (React && React.useState) || function(initial) { return [initial, function() {}]; };
+                  export var useEffect = (React && React.useEffect) || function() {};
+                  export var useContext = (React && React.useContext) || function(ctx) { return ctx._currentValue || {}; };
+                  export var useReducer = (React && React.useReducer) || function(reducer, initial) { return [initial, function() {}]; };
+                  export var useCallback = (React && React.useCallback) || function(fn) { return fn; };
+                  export var useMemo = (React && React.useMemo) || function(fn) { return fn(); };
+                  export var useRef = (React && React.useRef) || function(initial) { return { current: initial }; };
+                  export var useImperativeHandle = (React && React.useImperativeHandle) || function() {};
+                  export var useLayoutEffect = (React && React.useLayoutEffect) || function() {};
+                  export var useDebugValue = (React && React.useDebugValue) || function() {};
+                  export var useId = (React && React.useId) || function() { return 'id-' + Math.random().toString(36).slice(2); };
+                  export var useSyncExternalStore = (React && React.useSyncExternalStore) || function(subscribe, getSnapshot) { return getSnapshot(); };
+                  export var useTransition = (React && React.useTransition) || function() { return [false, function(fn) { fn(); }]; };
+                  export var useDeferredValue = (React && React.useDeferredValue) || function(value) { return value; };
+
+                  // Other React exports
+                  export var Children = (React && React.Children) || { map: function(c,f){return c?c.map(f):[];}, forEach: function(){}, count: function(c){return c?c.length:0;}, only: function(c){return c;}, toArray: function(c){return c||[];} };
+                  export var Component = (React && React.Component) || function() {};
+                  export var PureComponent = (React && React.PureComponent) || function() {};
+                  export var StrictMode = (React && React.StrictMode) || Fragment;
+                  export var Profiler = (React && React.Profiler) || function(props) { return props.children; };
+                  export var cloneElement = (React && React.cloneElement) || function(el) { return el; };
+                  export var isValidElement = (React && React.isValidElement) || function() { return true; };
+
+                  // JSX runtime exports - CRITICAL for component rendering
+                  // jsx(type, props, key) - used for elements with single child or no children
+                  // jsxs(type, props, key) - used for elements with multiple children
+                  export var jsx = safeJsx;
+                  export var jsxs = safeJsx;
+                  export var jsxDEV = safeJsx;
+
+                  console.log('[react-global] jsx/jsxs set on window:', typeof window.jsx, typeof window.jsxs);
+                `,
+                loader: 'js',
+              };
             });
 
             // Handle CSS imports (including CSS modules)
@@ -1128,6 +1342,46 @@ console.log('[bundle] Set window.__SCENERY_COMPONENT__:', typeof window.__SCENER
               const namedImportList = Array.from(packageImports)
                 .filter(name => name !== 'default' && name !== '*');
 
+              // Check if this is an internal app import (data fetching, actions, etc.)
+              // These need async function mocks that return empty data
+              const isInternalImport = pkgName.startsWith('@/') || pkgName.startsWith('~/');
+              const isActionsImport = pkgName.includes('/actions') || pkgName.includes('/api');
+              const isDataImport = pkgName.includes('/lib/') || pkgName.includes('/data') || pkgName.includes('/services');
+
+              // For internal imports, create smart async mocks
+              let internalMockSetup = '';
+              if (isInternalImport) {
+                internalMockSetup = `
+// Internal import mock: ${pkgName}
+const asyncMock = async function() { return null; };
+const dataMock = function() { return null; };
+const componentMock = function(props) { return props?.children || null; };
+`;
+                // If we know specific imports, mock them appropriately
+                if (namedImportList.length > 0) {
+                  internalMockSetup += namedImportList.map(name => {
+                    // Detect the type of function based on name
+                    if (name.startsWith('get') || name.startsWith('fetch') || name.startsWith('load')) {
+                      return `export const ${name} = async function() { console.log('[mock] ${pkgName}.${name} called'); return null; };`;
+                    } else if (name.startsWith('create') || name.startsWith('update') || name.startsWith('delete') || name.startsWith('log') || name.startsWith('save')) {
+                      return `export const ${name} = async function() { console.log('[mock] ${pkgName}.${name} called'); return { success: true }; };`;
+                    } else if (name.startsWith('use')) {
+                      return `export const ${name} = function() { return {}; };`;
+                    } else if (name[0] === name[0].toUpperCase()) {
+                      // Capitalized = likely a component
+                      return `export const ${name} = function(props) { return props?.children || null; };`;
+                    } else {
+                      return `export const ${name} = function() { return null; };`;
+                    }
+                  }).join('\n');
+                  // Return early for internal imports with known exports
+                  return {
+                    contents: `${internalMockSetup}\nexport default function() { return null; };`,
+                    loader: 'js',
+                  };
+                }
+              }
+
               // Build export statements for exactly what's imported
               // These check the registered mock first (works with Proxy), then fall back to mockFn
               const namedExports = namedImportList
@@ -1137,64 +1391,120 @@ console.log('[bundle] Set window.__SCENERY_COMPONENT__:', typeof window.__SCENER
               // Check if this is a Radix UI package - needs common component part exports
               const isRadixPackage = pkgName.startsWith('@radix-ui/react-');
 
+              // Debug logging only for undefined exports
+              const debugLog = '';
+
               // Common Radix component parts that need to be exported for namespace imports
+              // Helper to safely get a mock value - always returns a function (component)
               const radixParts = isRadixPackage ? `
+// Helper to safely get Radix component - always returns a function
+function getRadixPart(name) {
+  if (registeredMock && typeof registeredMock[name] === 'function') return registeredMock[name];
+  if (typeof registeredMock === 'function') return registeredMock;
+  return safePlaceholder;
+}
 // Radix component parts for namespace imports (import * as XPrimitive)
-export const Root = registeredMock ? (registeredMock['Root'] ?? registeredMock) : mockFn;
-export const Trigger = registeredMock ? (registeredMock['Trigger'] ?? registeredMock) : mockFn;
-export const Content = registeredMock ? (registeredMock['Content'] ?? registeredMock) : mockFn;
-export const Portal = registeredMock ? (registeredMock['Portal'] ?? registeredMock) : mockFn;
-export const Overlay = registeredMock ? (registeredMock['Overlay'] ?? registeredMock) : mockFn;
-export const Title = registeredMock ? (registeredMock['Title'] ?? registeredMock) : mockFn;
-export const Description = registeredMock ? (registeredMock['Description'] ?? registeredMock) : mockFn;
-export const Close = registeredMock ? (registeredMock['Close'] ?? registeredMock) : mockFn;
-export const Action = registeredMock ? (registeredMock['Action'] ?? registeredMock) : mockFn;
-export const Cancel = registeredMock ? (registeredMock['Cancel'] ?? registeredMock) : mockFn;
-export const Item = registeredMock ? (registeredMock['Item'] ?? registeredMock) : mockFn;
-export const ItemText = registeredMock ? (registeredMock['ItemText'] ?? registeredMock) : mockFn;
-export const ItemIndicator = registeredMock ? (registeredMock['ItemIndicator'] ?? registeredMock) : mockFn;
-export const Group = registeredMock ? (registeredMock['Group'] ?? registeredMock) : mockFn;
-export const Label = registeredMock ? (registeredMock['Label'] ?? registeredMock) : mockFn;
-export const Separator = registeredMock ? (registeredMock['Separator'] ?? registeredMock) : mockFn;
-export const Arrow = registeredMock ? (registeredMock['Arrow'] ?? registeredMock) : mockFn;
-export const Value = registeredMock ? (registeredMock['Value'] ?? registeredMock) : mockFn;
-export const Icon = registeredMock ? (registeredMock['Icon'] ?? registeredMock) : mockFn;
-export const Viewport = registeredMock ? (registeredMock['Viewport'] ?? registeredMock) : mockFn;
-export const ScrollUpButton = registeredMock ? (registeredMock['ScrollUpButton'] ?? registeredMock) : mockFn;
-export const ScrollDownButton = registeredMock ? (registeredMock['ScrollDownButton'] ?? registeredMock) : mockFn;
-export const Track = registeredMock ? (registeredMock['Track'] ?? registeredMock) : mockFn;
-export const Range = registeredMock ? (registeredMock['Range'] ?? registeredMock) : mockFn;
-export const Thumb = registeredMock ? (registeredMock['Thumb'] ?? registeredMock) : mockFn;
-export const Header = registeredMock ? (registeredMock['Header'] ?? registeredMock) : mockFn;
-export const Body = registeredMock ? (registeredMock['Body'] ?? registeredMock) : mockFn;
-export const Footer = registeredMock ? (registeredMock['Footer'] ?? registeredMock) : mockFn;
-export const List = registeredMock ? (registeredMock['List'] ?? registeredMock) : mockFn;
-export const Indicator = registeredMock ? (registeredMock['Indicator'] ?? registeredMock) : mockFn;
-export const Image = registeredMock ? (registeredMock['Image'] ?? registeredMock) : mockFn;
-export const Fallback = registeredMock ? (registeredMock['Fallback'] ?? registeredMock) : mockFn;
-export const Corner = registeredMock ? (registeredMock['Corner'] ?? registeredMock) : mockFn;
-export const Scrollbar = registeredMock ? (registeredMock['Scrollbar'] ?? registeredMock) : mockFn;
-export const Sub = registeredMock ? (registeredMock['Sub'] ?? registeredMock) : mockFn;
-export const SubTrigger = registeredMock ? (registeredMock['SubTrigger'] ?? registeredMock) : mockFn;
-export const SubContent = registeredMock ? (registeredMock['SubContent'] ?? registeredMock) : mockFn;
-export const RadioGroup = registeredMock ? (registeredMock['RadioGroup'] ?? registeredMock) : mockFn;
-export const RadioItem = registeredMock ? (registeredMock['RadioItem'] ?? registeredMock) : mockFn;
-export const CheckboxItem = registeredMock ? (registeredMock['CheckboxItem'] ?? registeredMock) : mockFn;
-export const Provider = registeredMock ? (registeredMock['Provider'] ?? registeredMock) : mockFn;
+export var Root = getRadixPart('Root');
+export var Trigger = getRadixPart('Trigger');
+export var Content = getRadixPart('Content');
+export var Portal = getRadixPart('Portal');
+export var Overlay = getRadixPart('Overlay');
+export var Title = getRadixPart('Title');
+export var Description = getRadixPart('Description');
+export var Close = getRadixPart('Close');
+export var Action = getRadixPart('Action');
+export var Cancel = getRadixPart('Cancel');
+export var Item = getRadixPart('Item');
+export var ItemText = getRadixPart('ItemText');
+export var ItemIndicator = getRadixPart('ItemIndicator');
+export var Group = getRadixPart('Group');
+export var Label = getRadixPart('Label');
+export var Separator = getRadixPart('Separator');
+export var Arrow = getRadixPart('Arrow');
+export var Value = getRadixPart('Value');
+export var Icon = getRadixPart('Icon');
+export var Viewport = getRadixPart('Viewport');
+export var ScrollUpButton = getRadixPart('ScrollUpButton');
+export var ScrollDownButton = getRadixPart('ScrollDownButton');
+export var Track = getRadixPart('Track');
+export var Range = getRadixPart('Range');
+export var Thumb = getRadixPart('Thumb');
+export var Header = getRadixPart('Header');
+export var Body = getRadixPart('Body');
+export var Footer = getRadixPart('Footer');
+export var List = getRadixPart('List');
+export var Indicator = getRadixPart('Indicator');
+export var Image = getRadixPart('Image');
+export var Fallback = getRadixPart('Fallback');
+export var Corner = getRadixPart('Corner');
+export var Scrollbar = getRadixPart('Scrollbar');
+export var Sub = getRadixPart('Sub');
+export var SubTrigger = getRadixPart('SubTrigger');
+export var SubContent = getRadixPart('SubContent');
+export var RadioGroup = getRadixPart('RadioGroup');
+export var RadioItem = getRadixPart('RadioItem');
+export var CheckboxItem = getRadixPart('CheckboxItem');
+export var Provider = getRadixPart('Provider');
 ` : '';
 
               const mockCode = `
 // Mock for: ${pkgName}
 // Exports: ${Array.from(packageImports).join(', ') || 'default only'}
-const mockFn = function mockFunction() { return null; };
+
+// Safe placeholder component that renders nothing but doesn't crash
+// CRITICAL: This must always be a valid React component to prevent error #130
+const safePlaceholder = function SafePlaceholder(props) {
+  if (typeof window !== 'undefined' && window.React && window.React.createElement) {
+    return window.React.createElement('div', { 'data-mock': '${pkgName}', style: { display: 'none' } });
+  }
+  return null;
+};
+
+// Helper to safely get a value from mock, always returning a function for component-like exports
+function safeGetExport(mock, name, expectComponent) {
+  if (!mock) return safePlaceholder;
+  var val = mock[name];
+
+  // If undefined or null, return placeholder
+  if (val === undefined || val === null) return safePlaceholder;
+
+  // If we expect a component (capitalized name or use* hook), ensure it's a function
+  if (expectComponent && typeof val !== 'function') {
+    console.warn('[mock] Expected function for ' + name + ' but got ' + typeof val);
+    return safePlaceholder;
+  }
+
+  return val;
+}
+
+// Check if a name looks like a component (capitalized) or hook (useXxx)
+function looksLikeComponent(name) {
+  if (!name || typeof name !== 'string') return false;
+  return name[0] === name[0].toUpperCase() || name.startsWith('use');
+}
 
 const registeredMock = (typeof window !== 'undefined' && window.__SCENERY_MOCKS__) ? window.__SCENERY_MOCKS__['${pkgName}'] : null;
 
-// Default export
-export default registeredMock?.default || registeredMock || mockFn;
+// Default export - ensure it's a valid component (function), not an object with only named exports
+// CRITICAL: Never allow undefined/null - always fall back to safePlaceholder
+var defaultExport;
+if (registeredMock && typeof registeredMock.default === 'function') {
+  defaultExport = registeredMock.default;
+} else if (typeof registeredMock === 'function') {
+  defaultExport = registeredMock;
+} else {
+  defaultExport = safePlaceholder;
+}
+export default defaultExport;
 
 // Named exports (from import analysis) - use registered mock if available
-${namedExports}
+// CRITICAL: Use safePlaceholder as fallback to prevent undefined component errors
+// For component-like names, ensure we always return a function
+${namedImportList.map(name => {
+  // Determine if this looks like a component/hook that should be a function
+  const isComponentLike = name[0] === name[0].toUpperCase() || name.startsWith('use');
+  return `export var ${name} = safeGetExport(registeredMock, '${name}', ${isComponentLike});`;
+}).join('\n')}
 ${radixParts}
 `;
               return { contents: mockCode, loader: 'js' };
@@ -1212,8 +1522,39 @@ ${radixParts}
       };
     }
 
-    // Prepend the inline mocks
-    const finalBundle = createInlineMocks() + '\n' + bundledCode;
+    // Prepend the inline mocks and wrap in error handling
+    // Also ensure __SCENERY_COMPONENT__ is set even if there's an error
+    const rawBundle = `
+// === SCENERY INLINE MOCKS ===
+try {
+${createInlineMocks()}
+} catch (mockError) {
+  console.error('[bundle] Mock setup error:', mockError);
+}
+
+// === BUNDLED COMPONENT ===
+try {
+${bundledCode}
+} catch (bundleError) {
+  console.error('[bundle] Component bundle error:', bundleError);
+  // Ensure __SCENERY_COMPONENT__ is set to something (don't use React - it might not be loaded)
+  if (!window.__SCENERY_COMPONENT__) {
+    window.__SCENERY_COMPONENT__ = function ErrorFallback() {
+      // Use React only if available, otherwise return a simple element
+      if (typeof React !== 'undefined' && React.createElement) {
+        return React.createElement('div', { style: { color: 'red', padding: '16px' } },
+          'Bundle error: ' + (bundleError.message || bundleError));
+      }
+      return null;
+    };
+    window.__BUNDLE_ERROR__ = bundleError.message || String(bundleError);
+  }
+}
+`;
+
+    // CRITICAL: Escape </script> to prevent breaking HTML parser when injected into script tags
+    // This must happen here (main app side) since playwright-worker might not have the fix yet
+    const finalBundle = rawBundle.replace(/<\/script>/gi, '<\\/script>');
 
     return {
       success: true,

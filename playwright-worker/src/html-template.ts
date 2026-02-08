@@ -16,6 +16,11 @@ export function createHtmlTemplate(options: {
 }): string {
   const { bundledJs, componentName, props } = options;
 
+  // Escape </script> in bundled JS to prevent breaking out of script tags
+  // This is critical - if component code contains "</script>" in a string,
+  // it would break the HTML parser and cause __makeSafeProps__ to be undefined
+  const escapedBundledJs = bundledJs.replace(/<\/script>/gi, '<\\/script>');
+
   // Serialize props safely for injection into script
   const propsJson = JSON.stringify(props);
 
@@ -26,9 +31,35 @@ export function createHtmlTemplate(options: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Component Render</title>
 
-  <!-- React 18 from CDN (React 19 doesn't have UMD builds) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- CRITICAL: Mock localStorage/sessionStorage BEFORE any CDN scripts load -->
+  <!-- Playwright's sandboxed environment throws SecurityError on storage access -->
+  <script>
+    (function() {
+      function createMockStorage() {
+        var data = {};
+        return {
+          getItem: function(k) { return data[k] !== undefined ? data[k] : null; },
+          setItem: function(k, v) { data[k] = String(v); },
+          removeItem: function(k) { delete data[k]; },
+          clear: function() { for (var k in data) delete data[k]; },
+          get length() { return Object.keys(data).length; },
+          key: function(i) { return Object.keys(data)[i] || null; }
+        };
+      }
+      // Always override - can't rely on checking because even the check might throw
+      try {
+        Object.defineProperty(window, 'localStorage', { value: createMockStorage(), writable: true, configurable: true });
+        Object.defineProperty(window, 'sessionStorage', { value: createMockStorage(), writable: true, configurable: true });
+      } catch (e) {
+        window.localStorage = createMockStorage();
+        window.sessionStorage = createMockStorage();
+      }
+    })();
+  </script>
+
+  <!-- React 18 from jsDelivr CDN (faster and more reliable than unpkg) -->
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -42,11 +73,16 @@ export function createHtmlTemplate(options: {
             primary: { DEFAULT: '#171717', foreground: '#fafafa' },
             secondary: { DEFAULT: '#f5f5f5', foreground: '#171717' },
             muted: { DEFAULT: '#f5f5f5', foreground: '#737373' },
-            accent: { DEFAULT: '#f5f5f5', foreground: '#171717' },
+            accent: { DEFAULT: '#171717', foreground: '#fafafa' },
             destructive: { DEFAULT: '#ef4444', foreground: '#fafafa' },
+            success: { DEFAULT: '#22c55e', foreground: '#ffffff' },
+            warning: { DEFAULT: '#f59e0b', foreground: '#ffffff' },
+            info: { DEFAULT: '#3b82f6', foreground: '#ffffff' },
             border: '#e5e5e5',
             input: '#e5e5e5',
             ring: '#171717',
+            card: { DEFAULT: '#ffffff', foreground: '#0a0a0a' },
+            popover: { DEFAULT: '#ffffff', foreground: '#0a0a0a' },
           },
           borderRadius: {
             lg: '0.5rem',
@@ -120,18 +156,8 @@ export function createHtmlTemplate(options: {
       };
     };
 
-    // Storage
-    var mockStorage = {
-      _data: {},
-      getItem: function(k) { return this._data[k] || null; },
-      setItem: function(k, v) { this._data[k] = String(v); },
-      removeItem: function(k) { delete this._data[k]; },
-      clear: function() { this._data = {}; },
-      get length() { return Object.keys(this._data).length; },
-      key: function(i) { return Object.keys(this._data)[i] || null; }
-    };
-    if (!window.localStorage) window.localStorage = mockStorage;
-    if (!window.sessionStorage) window.sessionStorage = Object.assign({}, mockStorage, { _data: {} });
+    // Storage mocks are now defined in <head> before CDN scripts load
+    // This prevents SecurityError when Tailwind or other CDN scripts access localStorage
 
     // ResizeObserver
     if (!window.ResizeObserver) {
@@ -413,6 +439,77 @@ export function createHtmlTemplate(options: {
       if (!console[m]) console[m] = function() {};
     });
 
+    // ========== FALLBACK JSX RUNTIME ==========
+    // CRITICAL: Define fallback jsx/jsxs BEFORE bundle runs
+    // This ensures React error #130 (undefined element type) never happens
+    // The bundle will override these with its own safe versions, but this provides a safety net
+    (function() {
+      var REACT_ELEMENT_TYPE = (typeof Symbol === 'function' && Symbol.for) ? Symbol.for('react.element') : 0xeac7;
+
+      function createSafeJsx(type, props, key) {
+        // Handle undefined/null type - the main cause of React error #130
+        if (type === undefined || type === null) {
+          console.warn('[fallback-jsx] Element type is undefined/null! This would cause React error #130. Props:', JSON.stringify(props || {}).slice(0, 200));
+          type = 'div'; // Fallback to div
+          props = Object.assign({}, props || {}, { 'data-jsx-error': 'undefined-type', style: { display: 'none' } });
+        }
+
+        // Validate type
+        var typeOf = typeof type;
+        if (typeOf !== 'string' && typeOf !== 'function') {
+          // Check for valid React types (forwardRef, memo, etc.)
+          if (!(typeOf === 'object' && type !== null && (type.$$typeof || type.render))) {
+            console.warn('[fallback-jsx] Invalid element type:', typeOf, 'Converting to div');
+            type = 'div';
+            props = Object.assign({}, props || {}, { 'data-jsx-error': 'invalid-type', style: { display: 'none' } });
+          }
+        }
+
+        // Use React.createElement if available
+        if (window.React && window.React.createElement) {
+          try {
+            var children = props ? props.children : undefined;
+            var propsWithoutChildren = {};
+            if (props) {
+              for (var k in props) {
+                if (k !== 'children') propsWithoutChildren[k] = props[k];
+              }
+            }
+            if (key !== undefined && key !== null) {
+              propsWithoutChildren.key = key;
+            }
+            if (children !== undefined) {
+              if (Array.isArray(children)) {
+                return window.React.createElement.apply(window.React, [type, propsWithoutChildren].concat(children));
+              }
+              return window.React.createElement(type, propsWithoutChildren, children);
+            }
+            return window.React.createElement(type, propsWithoutChildren);
+          } catch (err) {
+            console.error('[fallback-jsx] createElement error:', err.message);
+          }
+        }
+
+        // Manual fallback element
+        var childrenFromProps = props ? props.children : undefined;
+        return {
+          $$typeof: REACT_ELEMENT_TYPE,
+          type: type,
+          key: key || null,
+          ref: null,
+          props: Object.assign({}, props || {}, childrenFromProps !== undefined ? { children: childrenFromProps } : {}),
+          _owner: null
+        };
+      }
+
+      // Set on window - bundle may override with its own version
+      if (!window.jsx) window.jsx = createSafeJsx;
+      if (!window.jsxs) window.jsxs = createSafeJsx;
+      if (!window.jsxDEV) window.jsxDEV = createSafeJsx;
+
+      console.log('[template] Fallback jsx/jsxs defined');
+    })();
+
     // ========== SAFE PROPS UTILITY ==========
     // Makes any object safe to access - returns safe defaults for undefined
     window.__makeSafeProps__ = function(props) {
@@ -474,146 +571,184 @@ export function createHtmlTemplate(options: {
       return new Proxy(props, safeHandler);
     };
 
-    // ========== CONTEXT PROVIDERS ==========
-    // All common contexts pre-created
+    // ========== CONTEXT PROVIDERS & ERROR BOUNDARY ==========
+    // All React-dependent setup wrapped in a check
+    // If React fails to load from CDN, we skip this but __makeSafeProps__ is still defined
 
-    // Theme Context (next-themes)
-    window.__THEME_CONTEXT__ = React.createContext({
-      theme: 'light',
-      setTheme: function() {},
-      resolvedTheme: 'light',
-      themes: ['light', 'dark'],
-      systemTheme: 'light'
-    });
+    // Always define fallbacks first - they'll be overwritten if React is available
+    window.__THEME_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__FORM_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__ROUTER_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__AUTH_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__QUERY_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__TOAST_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__I18N_CONTEXT__ = { Provider: function(p) { return p.children; }, _currentValue: {} };
+    window.__UniversalProvider__ = function(props) { return props.children; };
+    window.__ErrorBoundary__ = function(props) { return props.children; };
 
-    // Form Context (react-hook-form)
-    window.__FORM_CONTEXT__ = React.createContext({
-      register: function() { return {}; },
-      handleSubmit: function(fn) { return function(e) { e && e.preventDefault && e.preventDefault(); return fn({}); }; },
-      watch: function() { return ''; },
-      setValue: function() {},
-      getValues: function() { return {}; },
-      getFieldState: function() { return { invalid: false, isDirty: false, isTouched: false, error: undefined }; },
-      formState: { errors: {}, isSubmitting: false, isValid: true, isDirty: false, isValidating: false },
-      control: { _formValues: {}, getFieldState: function() { return { invalid: false, isDirty: false, isTouched: false, error: undefined }; } },
-      reset: function() {},
-      setError: function() {},
-      clearErrors: function() {},
-      trigger: function() { return Promise.resolve(true); }
-    });
+    if (typeof React === 'undefined') {
+      console.error('[template] React not loaded from CDN!');
+      window.__REACT_LOAD_ERROR__ = true;
+    } else {
+      try {
+      // Theme Context (next-themes)
+      window.__THEME_CONTEXT__ = React.createContext({
+        theme: 'light',
+        setTheme: function() {},
+        resolvedTheme: 'light',
+        themes: ['light', 'dark'],
+        systemTheme: 'light'
+      });
 
-    // Router Context (next/navigation)
-    window.__ROUTER_CONTEXT__ = React.createContext({
-      push: function() {},
-      replace: function() {},
-      back: function() {},
-      forward: function() {},
-      prefetch: function() {},
-      refresh: function() {},
-      pathname: '/',
-      query: {},
-      params: {},
-      asPath: '/',
-      searchParams: new URLSearchParams()
-    });
+      // Form Context (react-hook-form)
+      window.__FORM_CONTEXT__ = React.createContext({
+        register: function() { return {}; },
+        handleSubmit: function(fn) { return function(e) { e && e.preventDefault && e.preventDefault(); return fn({}); }; },
+        watch: function() { return ''; },
+        setValue: function() {},
+        getValues: function() { return {}; },
+        getFieldState: function() { return { invalid: false, isDirty: false, isTouched: false, error: undefined }; },
+        formState: { errors: {}, isSubmitting: false, isValid: true, isDirty: false, isValidating: false },
+        control: { _formValues: {}, getFieldState: function() { return { invalid: false, isDirty: false, isTouched: false, error: undefined }; } },
+        reset: function() {},
+        setError: function() {},
+        clearErrors: function() {},
+        trigger: function() { return Promise.resolve(true); }
+      });
 
-    // Auth Context
-    window.__AUTH_CONTEXT__ = React.createContext({
-      user: { id: '1', email: 'demo@example.com', name: 'Demo User', image: '/avatar.jpg' },
-      isAuthenticated: true,
-      isLoading: false,
-      isSignedIn: true,
-      signIn: function() {},
-      signOut: function() {},
-      session: { user: { id: '1', email: 'demo@example.com', name: 'Demo User' } }
-    });
+      // Router Context (next/navigation)
+      window.__ROUTER_CONTEXT__ = React.createContext({
+        push: function() {},
+        replace: function() {},
+        back: function() {},
+        forward: function() {},
+        prefetch: function() {},
+        refresh: function() {},
+        pathname: '/',
+        query: {},
+        params: {},
+        asPath: '/',
+        searchParams: new URLSearchParams()
+      });
 
-    // Query Context (react-query)
-    window.__QUERY_CONTEXT__ = React.createContext({
-      invalidateQueries: function() {},
-      refetchQueries: function() {},
-      getQueryData: function() { return null; },
-      setQueryData: function() {},
-      getQueryState: function() { return { status: 'success', data: null }; }
-    });
+      // Auth Context
+      window.__AUTH_CONTEXT__ = React.createContext({
+        user: { id: '1', email: 'demo@example.com', name: 'Demo User', image: '/avatar.jpg' },
+        isAuthenticated: true,
+        isLoading: false,
+        isSignedIn: true,
+        signIn: function() {},
+        signOut: function() {},
+        session: { user: { id: '1', email: 'demo@example.com', name: 'Demo User' } }
+      });
 
-    // Toast Context
-    window.__TOAST_CONTEXT__ = React.createContext({
-      toast: function() { return '1'; },
-      toasts: [],
-      dismiss: function() {},
-      success: function() {},
-      error: function() {},
-      warning: function() {},
-      info: function() {}
-    });
+      // Query Context (react-query)
+      window.__QUERY_CONTEXT__ = React.createContext({
+        invalidateQueries: function() {},
+        refetchQueries: function() {},
+        getQueryData: function() { return null; },
+        setQueryData: function() {},
+        getQueryState: function() { return { status: 'success', data: null }; }
+      });
 
-    // I18n Context
-    window.__I18N_CONTEXT__ = React.createContext({
-      t: function(key) { return key; },
-      i18n: { language: 'en', changeLanguage: function() { return Promise.resolve(); } },
-      locale: 'en',
-      messages: {}
-    });
+      // Toast Context
+      window.__TOAST_CONTEXT__ = React.createContext({
+        toast: function() { return '1'; },
+        toasts: [],
+        dismiss: function() {},
+        success: function() {},
+        error: function() {},
+        warning: function() {},
+        info: function() {}
+      });
 
-    // ========== UNIVERSAL PROVIDER WRAPPER ==========
-    window.__UniversalProvider__ = function(props) {
-      var children = props.children;
+      // I18n Context
+      window.__I18N_CONTEXT__ = React.createContext({
+        t: function(key) { return key; },
+        i18n: { language: 'en', changeLanguage: function() { return Promise.resolve(); } },
+        locale: 'en',
+        messages: {}
+      });
 
-      // Wrap in all providers
-      var element = children;
-      element = React.createElement(window.__I18N_CONTEXT__.Provider, { value: window.__I18N_CONTEXT__._currentValue }, element);
-      element = React.createElement(window.__TOAST_CONTEXT__.Provider, { value: window.__TOAST_CONTEXT__._currentValue }, element);
-      element = React.createElement(window.__QUERY_CONTEXT__.Provider, { value: window.__QUERY_CONTEXT__._currentValue }, element);
-      element = React.createElement(window.__AUTH_CONTEXT__.Provider, { value: window.__AUTH_CONTEXT__._currentValue }, element);
-      element = React.createElement(window.__ROUTER_CONTEXT__.Provider, { value: window.__ROUTER_CONTEXT__._currentValue }, element);
-      element = React.createElement(window.__FORM_CONTEXT__.Provider, { value: window.__FORM_CONTEXT__._currentValue }, element);
-      element = React.createElement(window.__THEME_CONTEXT__.Provider, { value: window.__THEME_CONTEXT__._currentValue }, element);
+      // ========== UNIVERSAL PROVIDER WRAPPER ==========
+      window.__UniversalProvider__ = function(props) {
+        var children = props.children;
 
-      return element;
-    };
+        // Wrap in all providers
+        var element = children;
+        element = React.createElement(window.__I18N_CONTEXT__.Provider, { value: window.__I18N_CONTEXT__._currentValue }, element);
+        element = React.createElement(window.__TOAST_CONTEXT__.Provider, { value: window.__TOAST_CONTEXT__._currentValue }, element);
+        element = React.createElement(window.__QUERY_CONTEXT__.Provider, { value: window.__QUERY_CONTEXT__._currentValue }, element);
+        element = React.createElement(window.__AUTH_CONTEXT__.Provider, { value: window.__AUTH_CONTEXT__._currentValue }, element);
+        element = React.createElement(window.__ROUTER_CONTEXT__.Provider, { value: window.__ROUTER_CONTEXT__._currentValue }, element);
+        element = React.createElement(window.__FORM_CONTEXT__.Provider, { value: window.__FORM_CONTEXT__._currentValue }, element);
+        element = React.createElement(window.__THEME_CONTEXT__.Provider, { value: window.__THEME_CONTEXT__._currentValue }, element);
 
-    // ========== ERROR BOUNDARY ==========
-    window.__ErrorBoundary__ = (function() {
-      function ErrorBoundary(props) {
-        this.state = { hasError: false, error: null };
-      }
-      ErrorBoundary.prototype = Object.create(React.Component.prototype);
-      ErrorBoundary.prototype.constructor = ErrorBoundary;
-      ErrorBoundary.getDerivedStateFromError = function(error) {
-        return { hasError: true, error: error };
+        return element;
       };
-      ErrorBoundary.prototype.componentDidCatch = function(error, info) {
-        console.error('[ErrorBoundary]', error, info);
-        window.__RENDER_ERRORS__.push({ message: error.message, stack: error.stack, componentStack: info?.componentStack });
-      };
-      ErrorBoundary.prototype.render = function() {
-        if (this.state.hasError) {
-          return React.createElement('div', { style: { padding: '20px', color: '#ef4444' } },
-            React.createElement('h3', null, 'Component Error'),
-            React.createElement('pre', { style: { fontSize: '12px', whiteSpace: 'pre-wrap' } }, this.state.error?.message || 'Unknown error')
-          );
+
+      // ========== ERROR BOUNDARY ==========
+      window.__ErrorBoundary__ = (function() {
+        function ErrorBoundary(props) {
+          this.state = { hasError: false, error: null };
         }
-        return this.props.children;
-      };
-      return ErrorBoundary;
-    })();
+        ErrorBoundary.prototype = Object.create(React.Component.prototype);
+        ErrorBoundary.prototype.constructor = ErrorBoundary;
+        ErrorBoundary.getDerivedStateFromError = function(error) {
+          return { hasError: true, error: error };
+        };
+        ErrorBoundary.prototype.componentDidCatch = function(error, info) {
+          console.error('[ErrorBoundary]', error, info);
+          window.__RENDER_ERRORS__.push({ message: error.message, stack: error.stack, componentStack: info?.componentStack });
+        };
+        ErrorBoundary.prototype.render = function() {
+          if (this.state.hasError) {
+            return React.createElement('div', { style: { padding: '20px', color: '#ef4444' } },
+              React.createElement('h3', null, 'Component Error'),
+              React.createElement('pre', { style: { fontSize: '12px', whiteSpace: 'pre-wrap' } }, this.state.error?.message || 'Unknown error')
+            );
+          }
+          return this.props.children;
+        };
+        return ErrorBoundary;
+      })();
+      } catch (contextError) {
+        console.error('[template] Error setting up React contexts:', contextError.message);
+        // Fallbacks are already defined above, so we're safe
+      }
+    }
   </script>
 
   <!-- Bundled component code -->
   <script>
+    console.log('[template] About to run bundled JS');
+    console.log('[template] window.React available:', !!window.React);
+    console.log('[template] window.ReactDOM available:', !!window.ReactDOM);
     try {
-      ${bundledJs}
+      ${escapedBundledJs}
     } catch (bundleError) {
       console.error('Bundle execution error:', bundleError);
       window.__RENDER_ERROR__ = { message: 'Bundle execution failed: ' + bundleError.message, stack: bundleError.stack };
     }
+    console.log('[template] After bundled JS');
+    console.log('[template] window.__SCENERY_MOCKS__ set:', !!window.__SCENERY_MOCKS__);
+    console.log('[template] window.__SCENERY_MOCKS__ keys:', window.__SCENERY_MOCKS__ ? Object.keys(window.__SCENERY_MOCKS__).slice(0, 10) : 'none');
   </script>
 
   <script>
     (function() {
       try {
         console.log('__SCENERY_COMPONENT__:', typeof window.__SCENERY_COMPONENT__, window.__SCENERY_COMPONENT__);
+        console.log('__makeSafeProps__:', typeof window.__makeSafeProps__);
+        console.log('[render] jsx available:', typeof window.jsx, typeof window.jsxs);
+
+        // CRITICAL: Verify jsx/jsxs are available before render
+        // If bundle failed to set them, we should have fallbacks from earlier
+        if (typeof window.jsx !== 'function') {
+          console.error('[render] CRITICAL: window.jsx is not a function! Type:', typeof window.jsx);
+          window.__RENDER_ERROR__ = { message: 'JSX runtime not available. window.jsx is ' + typeof window.jsx };
+          return;
+        }
 
         var Component = window.__SCENERY_COMPONENT__;
 
@@ -622,23 +757,119 @@ export function createHtmlTemplate(options: {
           return;
         }
 
+        // Validate Component is a valid React element type
+        var componentType = typeof Component;
+        if (componentType !== 'function' && componentType !== 'object') {
+          window.__RENDER_ERROR__ = { message: 'Component is not a valid React element type. Got: ' + componentType };
+          return;
+        }
+
+        // If Component is an object (could be module with default export), try to extract
+        if (componentType === 'object' && Component.default) {
+          console.log('[template] Component is object with default export, using default');
+          Component = Component.default;
+        }
+
         // Parse props and make them safe
         var rawProps = ${propsJson};
-        var props = window.__makeSafeProps__(rawProps);
+
+        // Fallback if __makeSafeProps__ wasn't defined (e.g., first script block failed)
+        var props;
+        if (typeof window.__makeSafeProps__ === 'function') {
+          props = window.__makeSafeProps__(rawProps);
+        } else {
+          console.warn('__makeSafeProps__ not available, using raw props');
+          props = rawProps || {};
+        }
+
+        // Check if React is available
+        if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+          window.__RENDER_ERROR__ = { message: 'React or ReactDOM not loaded from CDN. Check network connectivity.' };
+          return;
+        }
+
+        // Verify React.createElement is available
+        if (typeof React.createElement !== 'function') {
+          console.error('[render] React.createElement is not a function!');
+          window.__RENDER_ERROR__ = { message: 'React.createElement not available' };
+          return;
+        }
+
+        // Verify wrapper components are available
+        if (typeof window.__ErrorBoundary__ !== 'function') {
+          console.warn('[render] __ErrorBoundary__ not a function, using passthrough');
+          window.__ErrorBoundary__ = function(props) { return props.children; };
+        }
+        if (typeof window.__UniversalProvider__ !== 'function') {
+          console.warn('[render] __UniversalProvider__ not a function, using passthrough');
+          window.__UniversalProvider__ = function(props) { return props.children; };
+        }
 
         // Suspense fallback for lazy components
         var SuspenseFallback = React.createElement('div', {
           style: { padding: '20px', textAlign: 'center', color: '#737373' }
         }, 'Loading...');
 
+        // Create a safe wrapper component that catches undefined element issues
+        var SafeComponent = function SafeComponentWrapper(wrapperProps) {
+          try {
+            var result = Component(wrapperProps);
+            // Check if component returned undefined (another cause of error #130)
+            if (result === undefined) {
+              console.warn('[render] Component returned undefined, replacing with null');
+              return null;
+            }
+            return result;
+          } catch (componentError) {
+            console.error('[render] Component threw during render:', componentError.message);
+            return React.createElement('div', {
+              style: { color: 'red', padding: '16px', border: '1px solid red' }
+            }, 'Component error: ' + componentError.message);
+          }
+        };
+
         // Create element with safe props, wrapped in Suspense, error boundary and all providers
-        var element = React.createElement(Component, props);
-        element = React.createElement(React.Suspense, { fallback: SuspenseFallback }, element);
-        element = React.createElement(window.__ErrorBoundary__, null, element);
-        element = React.createElement(window.__UniversalProvider__, null, element);
+        // Wrap each createElement call in try-catch to identify which one fails
+        var element;
+        try {
+          element = React.createElement(SafeComponent, props);
+          console.log('[render] Component element created successfully');
+        } catch (compErr) {
+          console.error('[render] Failed to create Component element:', compErr.message);
+          window.__RENDER_ERROR__ = { message: 'Failed to create component: ' + compErr.message, stack: compErr.stack };
+          return;
+        }
+
+        try {
+          element = React.createElement(React.Suspense, { fallback: SuspenseFallback }, element);
+        } catch (suspErr) {
+          console.warn('[render] Suspense wrap failed, skipping:', suspErr.message);
+          // Continue without Suspense wrapper
+        }
+
+        try {
+          element = React.createElement(window.__ErrorBoundary__, null, element);
+        } catch (ebErr) {
+          console.warn('[render] ErrorBoundary wrap failed, skipping:', ebErr.message);
+        }
+
+        try {
+          element = React.createElement(window.__UniversalProvider__, null, element);
+        } catch (upErr) {
+          console.warn('[render] UniversalProvider wrap failed, skipping:', upErr.message);
+        }
 
         var root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(element);
+
+        // Wrap render in try-catch for better error reporting
+        try {
+          root.render(element);
+          console.log('[render] root.render() called successfully');
+        } catch (renderErr) {
+          console.error('[render] root.render() failed:', renderErr.message);
+          window.__RENDER_ERROR__ = { message: 'Render failed: ' + renderErr.message, stack: renderErr.stack };
+          return;
+        }
 
         // Signal render complete after a delay to let async effects settle
         setTimeout(function() {

@@ -31,6 +31,8 @@ export interface CompositionContext {
   /** Custom HTML components imported by the user */
   customComponents?: { id: string; name: string; category: string | null; description: string | null; html: string }[];
   projectId?: string;
+  /** AI model to use for this project (e.g., gemini-3-flash-preview) */
+  aiModel?: string;
   /** Current playhead position in frames */
   currentFrame?: number;
   /** Currently selected item ID (if any) */
@@ -86,6 +88,7 @@ export function useChat() {
   // Cache discovered components for AI context
   const componentsRef = useRef<CompositionContext['components'] | null>(null);
   const customComponentsRef = useRef<CompositionContext['customComponents'] | null>(null);
+  const aiModelRef = useRef<string | null>(null);
   const componentsFetchedRef = useRef(false);
 
   const addUserMessage = useCallback((content: string): string => {
@@ -164,6 +167,23 @@ export function useChat() {
       if (!componentsFetchedRef.current) {
         componentsFetchedRef.current = true;
         const storeState = useCompositionStore.getState();
+
+        // Fetch project settings (including AI model)
+        try {
+          const res = await fetch(`/api/projects/${storeState.projectId}`);
+          if (res.ok) {
+            const data = await res.json();
+            aiModelRef.current = data.ai_model || 'gemini-3-pro-preview';
+            console.log('[useChat] Fetched project AI model:', data.ai_model, '-> using:', aiModelRef.current);
+          } else {
+            console.warn('[useChat] Failed to fetch project:', res.status, '- using default model');
+            aiModelRef.current = 'gemini-3-pro-preview';
+          }
+        } catch (err) {
+          // Default to pro if fetch fails
+          console.warn('[useChat] Error fetching project:', err, '- using default model');
+          aiModelRef.current = 'gemini-3-pro-preview';
+        }
 
         // Fetch React components
         try {
@@ -256,6 +276,7 @@ export function useChat() {
         components: componentsRef.current ?? undefined,
         customComponents: customComponentsRef.current ?? undefined,
         projectId: latestState.projectId,
+        aiModel: aiModelRef.current ?? undefined,
         currentFrame: latestState.currentFrame,
         selectedItemId: latestState.selectedItemId,
         selectedSceneId: latestState.selectedSceneId,

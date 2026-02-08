@@ -102,6 +102,7 @@ export async function createProject(formData: FormData): Promise<ActionResult<{ 
     name: formData.get('name'),
     description: formData.get('description') || null,
     repo_url: formData.get('repo_url') || null,
+    ai_model: formData.get('ai_model') || null,
   }
 
   const validated = projectSchema.safeParse(rawData)
@@ -117,6 +118,7 @@ export async function createProject(formData: FormData): Promise<ActionResult<{ 
       name: validated.data.name,
       description: validated.data.description,
       repo_url: validated.data.repo_url || null,
+      ai_model: validated.data.ai_model || 'gemini-3-pro-preview',
     })
     .select('id')
     .single()
@@ -144,6 +146,7 @@ export async function updateProject(
     name: formData.get('name'),
     description: formData.get('description') || null,
     repo_url: formData.get('repo_url') || null,
+    ai_model: formData.get('ai_model') || null,
   }
 
   const validated = projectSchema.safeParse(rawData)
@@ -158,6 +161,7 @@ export async function updateProject(
       name: validated.data.name,
       description: validated.data.description,
       repo_url: validated.data.repo_url || null,
+      ai_model: validated.data.ai_model || 'gemini-3-pro-preview',
     })
     .eq('id', projectId)
     .eq('user_id', user.id)

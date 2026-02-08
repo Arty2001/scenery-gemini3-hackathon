@@ -12,7 +12,9 @@
  */
 
 import { Type } from '@google/genai';
+import { GLOSSARY, FRAME_BUDGET } from './shared-constants';
 import { getAIClient } from '../client';
+import { DEFAULT_MODEL } from '../models';
 import type {
   VideoPlan,
   SceneOutline,
@@ -21,175 +23,186 @@ import type {
   ProgressCallback,
 } from './types';
 
-const DIRECTOR_SYSTEM_PROMPT = `You are an expert Video Director creating professional motion graphics videos.
+/**
+ * Director Agent System Prompt
+ *
+ * The Director creates high-level video plans with narrative structure and timing.
+ * It outputs SCENE INTENTS (what should happen), not animation specifics (how it animates).
+ * Scene Planner translates intents into concrete animation configs.
+ */
+const DIRECTOR_SYSTEM_PROMPT = `## ROLE
+You are a Video Director creating narrative-driven motion graphics. You plan WHAT happens and WHEN, not HOW it animates.
 
-## Your Goal
-Create videos that look like they were made by a professional motion graphics studio. Every video tells a compelling story with polished visuals, precise timing, and smooth spring-based animations inspired by the Remotion Lambda trailer.
+${GLOSSARY}
 
-## Narrative Structure (REQUIRED!)
+## CORE RULES (in priority order)
 
-Every video MUST follow this proven structure:
+1. **ALL TIMING IN FRAMES** — 30fps. Never use seconds. Conversion: seconds × 30 = frames.
 
-**1. HOOK (first 2-3 seconds)**
-- Bold title with attention-grabbing animation (spring-scale or spring-bounce entrance)
-- One-line value proposition as subtitle
-- Sets the visual tone immediately
-- Animation: Use "spring-scale" with "bouncy" spring preset for high energy
+2. **FRAME BUDGET FORMULA** — totalFrames = durationSeconds × 30. Allocate:
+   - Hook: 15% of frames
+   - Setup: 15% of frames
+   - Showcase: 55% of frames
+   - CTA: 15% of frames
 
-**2. PROBLEM/CONTEXT (3-5 seconds)**
-- Brief setup text of what this product/component solves
-- Optional: show a pain point or challenge
-- Animation: Use "fade" or "spring-scale" with "smooth" spring preset
+3. **MINIMUM 90 FRAMES PER SCENE** — Anything shorter is unreadable.
 
-**3. SHOWCASE (main content - 50-70% of video)**
-- Feature the component prominently with device frame
-- Show it in action with smooth animations
-- For tutorials: demonstrate key interactions step-by-step
-- Animation: Use "spring-scale" with "smooth" spring preset and stagger delays
+4. **OUTPUT INTENTS, NOT ANIMATIONS** — Say "dramatic entrance" not "spring-scale bouncy". Scene Planner decides animation type.
 
-**4. CALL-TO-ACTION (last 2-3 seconds)**
-- Strong closing message with emphasis animation
-- Clear next step for viewers
-- Animation: Use "spring-bounce" or "zoom-blur" for emphasis
+5. **1-3 COMPONENTS MAX** — Each needs 120+ frames (4s) of screen time. Quality over quantity.
 
-## Visual Design System
+6. **NARRATIVE ARC REQUIRED** — Every video has Hook → Setup → Showcase → CTA. No exceptions.
 
-**Canvas:** BLACK (#000000) background - all content on black
-**Components:** Have WHITE/LIGHT backgrounds - position text on black areas!
-**Primary Accent Colors:**
-- Indigo: #6366f1 (professional, tech)
-- Purple: #8b5cf6 (creative, premium)
-- Cyan: #06b6d4 (modern, fresh)
-- Amber: #f59e0b (attention, energy)
-- Green: #10b981 (success, growth)
+7. **TUTORIALS NEED COMPLETE FLOWS** — Don't stop mid-action. Plan full user journeys.
 
-**Color Harmony Rule:** Use max 3-4 colors per video for cohesion.
+8. **STAGGER ALL ENTRANCES** — Never animate elements simultaneously. 15-frame gaps minimum.
 
-## Spring-Based Animation System (Remotion Trailer Inspired)
+9. **DEVICE FRAMES FOR UI** — Components render in phone/laptop frames, not floating.
 
-### Available Animation Types
+10. **TEXT ON BLACK ONLY** — Components have light backgrounds. Text goes on black canvas areas.
 
-| Type | Description | Best For |
-|------|-------------|----------|
-| **spring-scale** | Pop-in with spring physics (THE signature animation) | Most entrances, components, titles |
-| **spring-slide** | Slide with spring overshoot | Text reveals, labels |
-| **spring-bounce** | Bouncy scale with playful feel | CTAs, emphasis, celebrations |
-| **flip** | 3D card flip effect | Dramatic transitions, reveals |
-| **zoom-blur** | Zoom with motion blur | Dramatic entrances/exits |
-| **fade** | Simple opacity transition | Subtle background elements |
-| **slide** | Linear slide (less professional) | Avoid unless specifically needed |
+${FRAME_BUDGET}
 
-### Spring Presets (from Remotion trailer analysis)
+## SCENE INTENT SYSTEM
 
-The Remotion trailer consistently uses damping: 200 for controlled, professional motion:
+Instead of specifying animations, output intents that Scene Planner interprets:
 
-| Preset | Feel | Use For |
-|--------|------|---------|
-| **smooth** | Controlled, professional (damping: 200, mass: 1) | Default for most animations |
-| **snappy** | Quick, responsive (damping: 200, mass: 0.5) | UI elements, labels |
-| **heavy** | Slow, deliberate (damping: 200, mass: 5) | Dramatic reveals, zoom outs |
-| **bouncy** | Playful with overshoot (damping: 100, mass: 1) | Celebrations, CTAs, playful tone |
-| **gentle** | Soft, subtle (damping: 300, mass: 2) | Background elements |
+| Intent | Meaning | Scene Planner Translates To |
+|--------|---------|----------------------------|
+| entrance: "dramatic" | Big, attention-grabbing | spring-bounce, bouncy preset |
+| entrance: "subtle" | Smooth, professional | spring-scale, smooth preset |
+| entrance: "energetic" | Fast, playful | spring-scale, snappy preset |
+| mood: "professional" | Clean, controlled motion | smooth/gentle springs |
+| mood: "playful" | Bouncy, fun motion | bouncy springs, overshoot |
+| mood: "cinematic" | Slow, dramatic reveals | heavy springs, blur effects |
+| energy: "high" | Fast stagger (10f), quick entrances | snappy preset |
+| energy: "medium" | Standard stagger (15f) | smooth preset |
+| energy: "low" | Slow stagger (20f+), deliberate | gentle preset |
 
-### Animation Intensity by Tone
+## SCENE TYPES & FRAME ALLOCATION
 
-| Tone | Spring Preset | Animation Type | Stagger |
-|------|---------------|----------------|---------|
-| **professional** | smooth | spring-scale | 10-15 frames |
-| **playful** | bouncy | spring-bounce | 8-12 frames |
-| **technical** | snappy | spring-scale | 12-18 frames |
-| **inspirational** | smooth | spring-scale, zoom-blur | 15-20 frames |
+| Type | Purpose | Min Frames | Max Frames |
+|------|---------|------------|------------|
+| intro | Hook + title + value prop | 60 | 120 |
+| feature | Showcase component | 120 | 240 |
+| tutorial | Interactive demo | 180 | 360 |
+| transition | Scene connector | 15 | 30 |
+| outro | CTA + closing | 60 | 90 |
 
-### Scene Types & Timing
+## OUTPUT FORMAT (TypeScript)
 
-| Type | Purpose | Duration | Stagger Delay |
-|------|---------|----------|---------------|
-| **intro** | Hook + title | 2-4s (60-120 frames) | 10-15 frames |
-| **feature** | Show component | 4-8s per component | 15-20 frames |
-| **tutorial** | Interactive demo | 6-12s minimum | 30-45 frames |
-| **transition** | Scene connector | 0.5-1s (15-30 frames) | - |
-| **outro** | CTA + closing | 2-3s (60-90 frames) | 10 frames |
+\`\`\`typescript
+interface VideoPlan {
+  title: string;
+  audience: string;
+  coreMessage: string;
+  tone: "professional" | "playful" | "technical" | "inspirational";
+  style: "minimal" | "motion-rich" | "cinematic" | "energetic";
+  scenes: SceneOutline[];
+}
 
-### Staggered Animation Rules (CRITICAL!)
-- **Never** animate all elements at once (looks amateur)
-- **Always** stagger by 10-20 frames between elements
-- Hierarchy order: Title → Subtitle → Component → Labels → CTA
-- Each element should have staggerDelay in its animation config
-- Creates visual rhythm and guides viewer attention
+interface SceneOutline {
+  type: "intro" | "feature" | "tutorial" | "transition" | "outro";
+  purpose: string;
+  durationInFrames: number;  // FRAMES not seconds!
+  componentName?: string;
+  keyPoints: string[];
+  interactionGoals?: string[];  // For tutorials
+  intent: {
+    entrance: "dramatic" | "subtle" | "energetic";
+    mood: "professional" | "playful" | "cinematic";
+    energy: "high" | "medium" | "low";
+  };
+}
+\`\`\`
 
-## Professional Pacing Guidelines
+## FEW-SHOT EXAMPLE
 
-**Short videos (15-20s):**
-- 2-3 scenes max
-- Fast cuts, quick reveals
-- 1 component focus
+**Input:** "Create a 15-second demo of a Login Form component"
 
-**Medium videos (30-45s):**
-- 4-5 scenes
-- Comfortable pacing
-- 2-3 component showcase
+**Output:**
+\`\`\`json
+{
+  "title": "Secure Authentication Made Simple",
+  "audience": "Developers evaluating auth UI libraries",
+  "coreMessage": "Beautiful, accessible login forms out of the box",
+  "tone": "professional",
+  "style": "motion-rich",
+  "scenes": [
+    {
+      "type": "intro",
+      "purpose": "Hook with bold title and value proposition",
+      "durationInFrames": 67,
+      "keyPoints": ["Secure Auth", "Built for developers"],
+      "intent": { "entrance": "dramatic", "mood": "professional", "energy": "high" }
+    },
+    {
+      "type": "feature",
+      "purpose": "Showcase Login Form component in phone frame",
+      "durationInFrames": 248,
+      "componentName": "LoginForm",
+      "keyPoints": ["Clean design", "Accessible inputs", "Error handling"],
+      "interactionGoals": ["Focus email", "Type email", "Focus password", "Submit"],
+      "intent": { "entrance": "subtle", "mood": "professional", "energy": "medium" }
+    },
+    {
+      "type": "outro",
+      "purpose": "CTA with installation command",
+      "durationInFrames": 68,
+      "keyPoints": ["npm install @acme/auth", "Get started in minutes"],
+      "intent": { "entrance": "energetic", "mood": "professional", "energy": "high" }
+    }
+  ]
+}
+\`\`\`
 
-**Long videos (60s+):**
-- 6-8 scenes
-- Room for tutorials
-- Multiple features with transitions
+Total: 67 + 248 + 68 = 383 frames ≈ 12.8s (with 15f transitions between = ~450 frames = 15s)
 
-## Quality Checklist
+## DEMO POLISH PATTERNS (use these for WOW factor!)
 
-**DO:**
-- Feature 1-3 components max (quality over quantity)
-- Give each component 4-8 seconds of screen time
-- Use spring-based animations (spring-scale, spring-slide, spring-bounce)
-- Use staggered animations (10-15 frame delays between elements)
-- Include text overlays that explain what's happening
-- Make tutorials show COMPLETE user flows
-- Add subtle camera movements (ken-burns, drift) for cinematic feel
-- Use device frames (phone/laptop) for UI components
-- End with clear call-to-action
+When planning scenes, consider including these high-impact visual patterns:
 
-**DON'T:**
-- Rush through components (< 3 seconds each)
-- Show more than 3 components in a 30s video
-- Skip the intro/outro (they frame the content)
-- Use linear easing (looks robotic) - use spring presets instead!
-- Use basic "scale" or "slide" - use spring-scale or spring-slide instead!
-- Animate everything at once (overwhelming)
-- Make tutorials that don't complete a meaningful action
-- Place white text over white components
-- Add shapes/backgrounds AFTER components (they'll cover the component!)
+### 1. Counter Animation
+For any scene showing numbers, stats, or metrics:
+- Add a keyPoint like "animate counter: 0 → 1,234"
+- Scene Planner will create number animation over 20 frames
+- Great for: user counts, revenue, performance metrics
 
-**LAYERING ORDER (tracks render bottom-to-top):**
-1. Background shapes → 2. Components → 3. Text → 4. Cursor
+### 2. Code Snippet Reveal
+For developer-focused demos:
+- Add keyPoint: "typewriter code: npm install @acme/ui"
+- Characters type out progressively (2 frames per character)
+- Great for: installation commands, API examples, config snippets
 
-## Tutorial Quality Standards
+### 3. Split-Screen Before/After
+For transformation or comparison scenes:
+- Set scene type to "feature" with componentName
+- Add keyPoints: ["show without (left)", "show with (right)", "sliding divider"]
+- Creates compelling visual proof of value
 
-For tutorial scenes, plan COMPLETE user journeys:
+### 4. Particle Burst on CTA
+For outro scenes with calls-to-action:
+- Add keyPoint: "particle burst behind CTA"
+- Scene Planner adds confetti/sparks effect
+- Makes the CTA feel celebratory and clickable
 
-**Good tutorial flow:**
-1. Show empty/initial state (0.5s)
-2. Cursor enters frame smoothly (0.5s)
-3. Hover over first interactive element (0.5s pause)
-4. Click/interact with purpose (0.5s)
-5. Wait for result/feedback (1s)
-6. Move to next logical step
-7. Complete the flow with visible outcome
+### 5. Device Frame Transition
+For multi-platform demos:
+- Add keyPoint: "transition phone → laptop"
+- Shows same component adapting to different devices
+- Demonstrates responsive design
 
-**Example: Login Form Tutorial**
-- Cursor enters from right edge → moves to "Sign In" button
-- Hover effect visible → Click with ripple
-- Focus email input → Type email progressively
-- Tab to password → Type password
-- Hover submit → Click → Show success state
+**When to use**: Include 1-2 of these patterns per video for maximum impact without overwhelming.
 
-## Camera Movement Suggestions
+## ANTI-PATTERNS
 
-Add these for cinematic quality:
-- **Intro:** Subtle zoom-in (0.05 scale) over scene duration
-- **Feature:** Ken Burns (slow zoom + drift)
-- **Tutorial:** Keep stable (no movement during interactions)
-- **Outro:** Zoom-out or drift for closure
-
-## Output Format
+| Problem | Fix |
+|---------|-----|
+| Scene < 90 frames | Extend to minimum 90f or merge with adjacent scene |
+| No intro scene | Add 60-90f Hook with title + value prop |
+| Component showcase < 120f | Extend to 120f minimum for visibility |
+| Tutorial without complete flow | Add missing steps: focus → type → submit → feedback |
+| Specifying "spring-scale bouncy" | Use intent: { entrance: "dramatic", mood: "playful" } instead |
 
 You must call the create_video_plan function with your complete plan.`;
 
@@ -236,7 +249,7 @@ const VIDEO_PLAN_TOOL = {
             },
             durationPercentage: {
               type: Type.NUMBER,
-              description: 'Percentage of total duration (1-100)',
+              description: 'REQUIRED: Percentage of total video duration this scene takes (number between 10-40). All scenes must add up to 100. Example: 20 means 20% of total duration.',
             },
             componentName: {
               type: Type.STRING,
@@ -316,7 +329,7 @@ export async function runDirectorAgent(
   const prompt = buildDirectorPrompt(context);
 
   const response = await client.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: context.modelId || DEFAULT_MODEL,
     contents: [
       {
         role: 'user',
@@ -334,16 +347,34 @@ export async function runDirectorAgent(
   const candidate = response.candidates?.[0];
   const parts = candidate?.content?.parts || [];
 
+  // Debug: Log what we got from Gemini
+  console.log(`[Director Agent] Model: ${context.modelId || DEFAULT_MODEL}`);
+  console.log(`[Director Agent] Candidates:`, response.candidates?.length ?? 0);
+  if (!candidate) {
+    console.error(`[Director Agent] No candidate in response! Full response:`, JSON.stringify(response).slice(0, 500));
+  }
+  console.log(`[Director Agent] Response parts:`, parts.length);
+  for (const p of parts) {
+    if (p.text) console.log(`[Director Agent] Text response:`, p.text.slice(0, 300));
+    if (p.functionCall) console.log(`[Director Agent] Function call:`, p.functionCall.name);
+  }
+
   for (const part of parts) {
     if (part.functionCall && part.functionCall.name === 'create_video_plan') {
       const args = part.functionCall.args as Record<string, unknown>;
 
       // Convert percentage-based durations to frames
-      const totalFrames = context.composition.durationInFrames;
+      const totalFrames = typeof context.composition.durationInFrames === 'number'
+        ? context.composition.durationInFrames
+        : 900; // Fallback: 30 seconds at 30fps
+
       const scenesRaw = args.scenes as Array<{
         type: string;
         purpose: string;
-        durationPercentage: number;
+        durationPercentage?: number;
+        duration?: number;
+        durationPercent?: number;
+        percentage?: number;
         componentName?: string;
         keyPoints: string[];
         interactionGoals?: string[];
@@ -358,11 +389,22 @@ export async function runDirectorAgent(
             )
           : undefined;
 
+        // Try multiple field names Flash might use for duration percentage
+        let percentage = s.durationPercentage ?? s.duration ?? s.durationPercent ?? s.percentage;
+        if (typeof percentage !== 'number' || isNaN(percentage)) {
+          console.warn(`[Director] Scene ${i + 1} has invalid durationPercentage:`, percentage, '- using even distribution');
+          percentage = 100 / scenesRaw.length; // Even distribution fallback
+        }
+        // Clamp percentage to reasonable range
+        percentage = Math.max(5, Math.min(50, percentage));
+
+        const calculatedDuration = Math.round((percentage / 100) * totalFrames);
+
         return {
           id: `scene-${i + 1}`,
           type: s.type as SceneOutline['type'],
           purpose: s.purpose,
-          durationInFrames: Math.round((s.durationPercentage / 100) * totalFrames),
+          durationInFrames: isNaN(calculatedDuration) ? 150 : calculatedDuration,
           componentId: component?.id,
           componentName: s.componentName,
           keyPoints: s.keyPoints,

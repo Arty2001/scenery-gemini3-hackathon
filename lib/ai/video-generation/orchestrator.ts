@@ -25,6 +25,34 @@ import { planAllScenes } from './scene-planner-agent';
 import { runAssemblyAgent, validateComposition, toEditorTracks } from './assembly-agent';
 import { runRefinementAgent, meetsQualityThreshold, applyAutoFixes } from './refinement-agent';
 
+// =============================================================================
+// STRUCTURED LOGGING FOR PIPELINE ANALYTICS
+// =============================================================================
+
+interface PipelineLogEntry {
+  stage: 'director' | 'scene-planner' | 'assembly' | 'refinement';
+  attempt: number;
+  durationMs: number;
+  tokenUsage?: { input: number; output: number };
+  score?: number;
+  regenerated: boolean;
+  sceneCount?: number;
+  trackCount?: number;
+  itemCount?: number;
+}
+
+/**
+ * Emit structured JSON logs for pipeline analytics.
+ * These logs can be aggregated to measure pipeline efficiency.
+ */
+function logPipelineStage(entry: PipelineLogEntry): void {
+  console.log(JSON.stringify({
+    ...entry,
+    timestamp: new Date().toISOString(),
+    pipeline: 'video-generation',
+  }));
+}
+
 import type {
   AgentContext,
   ComponentInfo,
@@ -66,6 +94,9 @@ export interface VideoGenerationRequest {
 
   /** Max refinement iterations */
   maxRefinementIterations?: number;
+
+  /** AI model to use for generation (e.g., gemini-3-pro-preview) */
+  modelId?: string;
 }
 
 export interface VideoGenerationResult {
@@ -125,6 +156,7 @@ export async function generateVideo(
     targetDurationSeconds: request.targetDurationSeconds,
     projectId: request.projectId,
     availableAssets: request.availableAssets,
+    modelId: request.modelId,
   };
 
   try {
@@ -148,6 +180,14 @@ export async function generateVideo(
       `📋 Director created plan: "${videoPlan.title}" with ${videoPlan.scenes.length} scenes`
     );
 
+    logPipelineStage({
+      stage: 'director',
+      attempt: 1,
+      durationMs: agentTimings['director'],
+      regenerated: false,
+      sceneCount: videoPlan.scenes.length,
+    });
+
     // =============================================
     // Stage 2: Scene Planner Agent (Parallel)
     // =============================================
@@ -158,6 +198,14 @@ export async function generateVideo(
     agentTimings['scenePlanner'] = Date.now() - scenePlannerStart;
 
     onProgress?.(`🎨 Scene Planner completed ${detailedScenes.length} detailed scenes`);
+
+    logPipelineStage({
+      stage: 'scene-planner',
+      attempt: 1,
+      durationMs: agentTimings['scenePlanner'],
+      regenerated: false,
+      sceneCount: detailedScenes.length,
+    });
 
     // =============================================
     // Stage 3: Assembly Agent
@@ -177,6 +225,15 @@ export async function generateVideo(
     onProgress?.(
       `🔧 Assembly complete: ${composition.tracks.length} tracks, ${composition.tracks.reduce((sum, t) => sum + t.items.length, 0)} items`
     );
+
+    logPipelineStage({
+      stage: 'assembly',
+      attempt: 1,
+      durationMs: agentTimings['assembly'],
+      regenerated: false,
+      trackCount: composition.tracks.length,
+      itemCount: composition.tracks.reduce((sum, t) => sum + t.items.length, 0),
+    });
 
     // =============================================
     // Stage 4: Refinement Agent (with iteration)
@@ -221,6 +278,14 @@ export async function generateVideo(
 
       // Track this version
       versions.push({ composition, quality });
+
+      logPipelineStage({
+        stage: 'refinement',
+        attempt: refinementIterations,
+        durationMs: Date.now() - refinementStart,
+        score: quality.overallScore,
+        regenerated: true,
+      });
     }
 
     // If we hit max iterations without meeting threshold, pick the best version
@@ -236,6 +301,15 @@ export async function generateVideo(
     }
 
     agentTimings['refinement'] = Date.now() - refinementStart;
+
+    // Log final refinement result
+    logPipelineStage({
+      stage: 'refinement',
+      attempt: refinementIterations + 1,
+      durationMs: agentTimings['refinement'],
+      score: quality.overallScore,
+      regenerated: refinementIterations > 0,
+    });
 
     // =============================================
     // Final Output

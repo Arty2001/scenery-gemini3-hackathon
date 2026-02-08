@@ -221,10 +221,18 @@ export async function cloneConnectedRepository(
     return { success: false, error: 'Failed to update connection record' }
   }
 
+  // Fetch project's AI model setting
+  const { data: projectData } = await supabase
+    .from('projects')
+    .select('ai_model')
+    .eq('id', projectId)
+    .single()
+
   // Trigger component discovery in background (fire-and-forget)
   discoverComponents(connection.id, localPath, {
     name: connection.name,
     owner: connection.owner,
+    aiModel: projectData?.ai_model || undefined,
   }).catch(err => console.error('Background discovery failed:', err))
 
   revalidatePath(`/protected/projects/${projectId}`)
@@ -235,10 +243,15 @@ export async function cloneConnectedRepository(
 export async function syncRepository(
   projectId: string
 ): Promise<ActionResult<{ updated: boolean }>> {
+  console.log(`\n========================================`);
+  console.log(`[sync] SYNC BUTTON CLICKED for project ${projectId}`);
+  console.log(`========================================\n`);
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
+    console.log(`[sync] ERROR: User not authenticated`);
     return { success: false, error: 'Sign in to sync repositories' }
   }
 
@@ -250,6 +263,7 @@ export async function syncRepository(
     .single()
 
   if (connError || !connectionData) {
+    console.log(`[sync] ERROR: No repository connected`);
     return { success: false, error: 'No repository connected' }
   }
 
@@ -295,19 +309,33 @@ export async function syncRepository(
     console.error('Failed to update sync timestamp:', updateError)
   }
 
-  // Re-discover components if files were updated
-  if (result.updated) {
-    console.log(`[sync] Git pulled new changes for ${connection.full_name}, starting discovery...`);
-    discoverComponents(connection.id, connection.local_path, {
-      name: connection.name,
-      owner: connection.owner,
-    }).catch(err => console.error('[sync] Background discovery failed:', err))
-  } else {
-    console.log(`[sync] No changes for ${connection.full_name}, skipping discovery`);
-  }
+  // Fetch project's AI model setting
+  const { data: projectData } = await supabase
+    .from('projects')
+    .select('ai_model')
+    .eq('id', projectId)
+    .single()
+
+  // Always run discovery - caching will skip unchanged components
+  // This ensures Playwright previews are generated even if git has no changes
+  console.log(`\n========================================`);
+  console.log(`[sync] STARTING DISCOVERY`);
+  console.log(`[sync] Repo: ${connection.full_name}`);
+  console.log(`[sync] Local path: ${connection.local_path}`);
+  console.log(`[sync] Git updated: ${result.updated}`);
+  console.log(`[sync] AI Model: ${projectData?.ai_model || 'default'}`);
+  console.log(`[sync] PLAYWRIGHT_WORKER_URL: ${process.env.PLAYWRIGHT_WORKER_URL ? 'SET' : 'NOT SET'}`);
+  console.log(`========================================\n`);
+
+  discoverComponents(connection.id, connection.local_path, {
+    name: connection.name,
+    owner: connection.owner,
+    aiModel: projectData?.ai_model || undefined,
+  }).catch(err => console.error('[sync] Background discovery failed:', err))
 
   revalidatePath(`/protected/projects/${projectId}`)
-  return { success: true, data: { updated: result.updated } }
+  // Always return updated: true so UI shows discovery progress
+  return { success: true, data: { updated: true } }
 }
 
 export async function disconnectRepository(

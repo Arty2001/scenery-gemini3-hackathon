@@ -33,6 +33,7 @@ export default async function ProjectSettingsPage({ params }: SettingsPageProps)
           name: project.name,
           description: project.description,
           repo_url: project.repo_url,
+          ai_model: project.ai_model,
         }}
       />
 

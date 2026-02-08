@@ -2,6 +2,7 @@
 
 import { readFile } from 'fs/promises';
 import path from 'path';
+import { createHash } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import {
   scanRepository,
@@ -19,6 +20,13 @@ import type { Json } from '@/types/database.types';
 import { isDemoProject } from '@/lib/demo-projects';
 
 /**
+ * Compute SHA-256 hash of content for cache invalidation
+ */
+function computeHash(content: string): string {
+  return createHash('sha256').update(content).digest('hex').slice(0, 16);
+}
+
+/**
  * ComponentInfo with database ID
  * Used when returning components from the database
  */
@@ -30,6 +38,7 @@ interface DiscoveryResult {
   success: boolean;
   componentsFound: number;
   componentsAnalyzed: number;
+  componentsCached: number;
   errors: Array<{ file: string; error: string }>;
 }
 
@@ -43,7 +52,7 @@ export async function discoverComponents(
   // Get user for auth check
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return { success: false, componentsFound: 0, componentsAnalyzed: 0, errors: [{ file: '', error: 'Not authenticated' }] };
+    return { success: false, componentsFound: 0, componentsAnalyzed: 0, componentsCached: 0, errors: [{ file: '', error: 'Not authenticated' }] };
   }
 
   // Verify user owns this repository connection
@@ -54,78 +63,194 @@ export async function discoverComponents(
     .single();
 
   if (repoError || !repo) {
-    return { success: false, componentsFound: 0, componentsAnalyzed: 0, errors: [{ file: '', error: 'Repository not found' }] };
+    return { success: false, componentsFound: 0, componentsAnalyzed: 0, componentsCached: 0, errors: [{ file: '', error: 'Repository not found' }] };
   }
 
   try {
+    console.log(`\n========================================`);
+    console.log(`[discovery] COMPONENT DISCOVERY STARTED`);
+    console.log(`[discovery] Repository ID: ${repositoryId}`);
+    console.log(`[discovery] Local path: ${localPath}`);
+    console.log(`[discovery] Repo: ${repoContext.owner}/${repoContext.name}`);
+    console.log(`========================================\n`);
+
     // Step 1: Scan repository for components
-    console.log(`[discovery] Starting scan of ${localPath}`);
+    console.log(`[discovery] Step 1: Scanning for components...`);
     const { components, errors: scanErrors } = await scanRepository(localPath);
     console.log(`[discovery] Scan complete: ${components.length} components found, ${scanErrors.length} errors`);
 
     if (components.length === 0) {
-      return { success: true, componentsFound: 0, componentsAnalyzed: 0, errors: scanErrors };
+      // Delete any existing components since repo has none now
+      await supabase.from('discovered_components').delete().eq('repository_id', repositoryId);
+      return { success: true, componentsFound: 0, componentsAnalyzed: 0, componentsCached: 0, errors: scanErrors };
     }
 
-    // Step 2: Clear previous components
-    await supabase.from('discovered_components').delete().eq('repository_id', repositoryId);
-
-    // Step 3: Insert shell records immediately so polling sees total count
-    const shellRecords = components.map(comp => ({
-      repository_id: repositoryId,
-      file_path: comp.filePath,
-      component_name: comp.componentName,
-      display_name: comp.displayName ?? null,
-      description: comp.description ?? null,
-      props_schema: comp.props as unknown as Json,
-      is_compound_child: comp.isCompoundChild ?? false,
-    }));
-
-    const { data: insertedRows, error: insertError } = await supabase
-      .from('discovered_components')
-      .insert(shellRecords)
-      .select('id, component_name, file_path');
-
-    if (insertError || !insertedRows) {
-      console.error('[discovery] Failed to insert shell records:', insertError);
-      return { success: false, componentsFound: components.length, componentsAnalyzed: 0, errors: [{ file: '', error: insertError?.message ?? 'Insert failed' }] };
-    }
-    console.log(`[discovery] ${insertedRows.length} shell records inserted`);
-
-    // Build lookup: componentName::filePath -> database ID
-    const dbIdMap = new Map<string, string>();
-    for (const row of insertedRows) {
-      dbIdMap.set(`${row.component_name}::${row.file_path}`, row.id);
-    }
-
-    // Step 4: Read source code
+    // Step 2: Read source code and compute hashes
     const sourceCodeMap: Record<string, string> = {};
+    const hashMap: Record<string, string> = {};
     const uniqueFilePaths = [...new Set(components.map(c => c.filePath))];
     await Promise.all(
       uniqueFilePaths.map(async (filePath) => {
         try {
-          sourceCodeMap[filePath] = await readFile(path.join(localPath, filePath), 'utf-8');
+          const content = await readFile(path.join(localPath, filePath), 'utf-8');
+          sourceCodeMap[filePath] = content;
+          hashMap[filePath] = computeHash(content);
         } catch { /* skip unreadable files */ }
       })
     );
 
-    // Step 5: AI analysis — update DB incrementally
+    // Step 3: Fetch existing components with their hashes
+    const { data: existingComponents } = await supabase
+      .from('discovered_components')
+      .select('id, component_name, file_path, content_hash, category, demo_props, preview_html')
+      .eq('repository_id', repositoryId);
+
+    // Build lookup: componentName::filePath -> existing DB record
+    const existingMap = new Map<string, {
+      id: string;
+      content_hash: string | null;
+      category: string | null;
+      demo_props: Json | null;
+      preview_html: string | null;
+    }>();
+    for (const row of existingComponents ?? []) {
+      existingMap.set(`${row.component_name}::${row.file_path}`, {
+        id: row.id,
+        content_hash: row.content_hash,
+        category: row.category,
+        demo_props: row.demo_props,
+        preview_html: row.preview_html,
+      });
+    }
+
+    // Step 4: Categorize components
+    const newComponents: ComponentInfo[] = [];
+    const changedComponents: ComponentInfo[] = [];
+    const unchangedComponents: ComponentInfo[] = [];
+    const seenKeys = new Set<string>();
+
+    for (const comp of components) {
+      const key = `${comp.componentName}::${comp.filePath}`;
+      seenKeys.add(key);
+      const currentHash = hashMap[comp.filePath];
+      const existing = existingMap.get(key);
+
+      if (!existing) {
+        newComponents.push(comp);
+      } else if (existing.content_hash !== currentHash) {
+        changedComponents.push(comp);
+      } else {
+        unchangedComponents.push(comp);
+      }
+    }
+
+    // Find deleted components (in DB but not in scan)
+    const deletedIds: string[] = [];
+    for (const [key, existing] of existingMap) {
+      if (!seenKeys.has(key)) {
+        deletedIds.push(existing.id);
+      }
+    }
+
+    console.log(`[discovery] Cache analysis: ${newComponents.length} new, ${changedComponents.length} changed, ${unchangedComponents.length} cached, ${deletedIds.length} deleted`);
+
+    // Step 5: Delete removed components
+    if (deletedIds.length > 0) {
+      await supabase.from('discovered_components').delete().in('id', deletedIds);
+      console.log(`[discovery] Deleted ${deletedIds.length} removed components`);
+    }
+
+    // Step 6: Insert new components
+    const componentsToProcess = [...newComponents, ...changedComponents];
+    const dbIdMap = new Map<string, string>();
+
+    if (newComponents.length > 0) {
+      const shellRecords = newComponents.map(comp => ({
+        repository_id: repositoryId,
+        file_path: comp.filePath,
+        component_name: comp.componentName,
+        display_name: comp.displayName ?? null,
+        description: comp.description ?? null,
+        props_schema: comp.props as unknown as Json,
+        is_compound_child: comp.isCompoundChild ?? false,
+        content_hash: hashMap[comp.filePath] ?? null,
+      }));
+
+      const { data: insertedRows, error: insertError } = await supabase
+        .from('discovered_components')
+        .insert(shellRecords)
+        .select('id, component_name, file_path');
+
+      if (insertError) {
+        console.error('[discovery] Failed to insert new components:', insertError);
+      } else if (insertedRows) {
+        for (const row of insertedRows) {
+          dbIdMap.set(`${row.component_name}::${row.file_path}`, row.id);
+        }
+        console.log(`[discovery] Inserted ${insertedRows.length} new components`);
+      }
+    }
+
+    // Step 7: Update changed components (reset analysis, update hash)
+    for (const comp of changedComponents) {
+      const key = `${comp.componentName}::${comp.filePath}`;
+      const existing = existingMap.get(key);
+      if (existing) {
+        dbIdMap.set(key, existing.id);
+        await supabase.from('discovered_components').update({
+          props_schema: comp.props as unknown as Json,
+          display_name: comp.displayName ?? null,
+          description: comp.description ?? null,
+          is_compound_child: comp.isCompoundChild ?? false,
+          content_hash: hashMap[comp.filePath] ?? null,
+          // Reset analysis fields
+          category: null,
+          category_confidence: null,
+          demo_props: null,
+          preview_html: null,
+          analysis_error: null,
+        }).eq('id', existing.id);
+      }
+    }
+    if (changedComponents.length > 0) {
+      console.log(`[discovery] Reset ${changedComponents.length} changed components for re-analysis`);
+    }
+
+    // Keep track of unchanged component IDs for relationship linking
+    for (const comp of unchangedComponents) {
+      const key = `${comp.componentName}::${comp.filePath}`;
+      const existing = existingMap.get(key);
+      if (existing) {
+        dbIdMap.set(key, existing.id);
+      }
+    }
+
+    // Step 8: AI analysis — only process new/changed components
+    // Build a map for quick lookup of component index by key
+    const componentIndexMap = new Map<string, number>();
+    components.forEach((c, i) => componentIndexMap.set(`${c.componentName}::${c.filePath}`, i));
+
     const analyzedComponents: ComponentInfo[] = [...components];
 
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.GEMINI_API_KEY && componentsToProcess.length > 0) {
       const concurrency = 3;
 
-      // Phase A: Categorize + demo props in parallel batches
-      for (let i = 0; i < components.length; i += concurrency) {
-        const batch = components.slice(i, i + concurrency);
+      // Phase A: Categorize + demo props in parallel batches (only new/changed)
+      console.log(`[discovery] Analyzing ${componentsToProcess.length} components (${unchangedComponents.length} cached)`);
+      for (let i = 0; i < componentsToProcess.length; i += concurrency) {
+        const batch = componentsToProcess.slice(i, i + concurrency);
         const batchResults = await Promise.all(
           batch.map((comp) => analyzeComponent(comp, repoContext))
         );
 
         for (let j = 0; j < batchResults.length; j++) {
           const comp = batchResults[j];
-          analyzedComponents[i + j] = comp;
-          const dbId = dbIdMap.get(`${comp.componentName}::${comp.filePath}`);
+          const key = `${comp.componentName}::${comp.filePath}`;
+          const originalIndex = componentIndexMap.get(key);
+          if (originalIndex !== undefined) {
+            analyzedComponents[originalIndex] = comp;
+          }
+          const dbId = dbIdMap.get(key);
           if (dbId) {
             await supabase.from('discovered_components').update({
               category: comp.category ?? null,
@@ -137,8 +262,8 @@ export async function discoverComponents(
             }).eq('id', dbId);
           }
         }
-        console.log(`[discovery] Categorized ${Math.min(i + concurrency, components.length)}/${components.length}`);
-        if (i + concurrency < components.length) await new Promise(r => setTimeout(r, 200));
+        console.log(`[discovery] Categorized ${Math.min(i + concurrency, componentsToProcess.length)}/${componentsToProcess.length}`);
+        if (i + concurrency < componentsToProcess.length) await new Promise(r => setTimeout(r, 200));
       }
 
       // Phase A.5: Extract component relationships from source code
@@ -212,9 +337,14 @@ export async function discoverComponents(
       }
       console.log(`[discovery] Found ${componentUsesMap.size} components with dependencies`);
 
-      // Phase B: Generate preview HTML one-at-a-time
-      for (let i = 0; i < analyzedComponents.length; i++) {
-        const comp = analyzedComponents[i];
+      // Phase B: Generate preview HTML one-at-a-time (only new/changed)
+      console.log(`[discovery] Generating previews for ${componentsToProcess.length} components`);
+      for (let i = 0; i < componentsToProcess.length; i++) {
+        const originalComp = componentsToProcess[i];
+        const key = `${originalComp.componentName}::${originalComp.filePath}`;
+        const originalIndex = componentIndexMap.get(key);
+        // Use the ANALYZED component (with demoProps from Phase A), not the original
+        const comp = originalIndex !== undefined ? analyzedComponents[originalIndex] : originalComp;
         const sourceCode = sourceCodeMap[comp.filePath];
 
         const relatedSourceCode: Record<string, string> = {};
@@ -244,13 +374,15 @@ export async function discoverComponents(
               console.log(`[discovery] ${comp.componentName} elements:`, interactiveElements.map(e => `${e.tag}[${e.selector}]`).join(', '));
             }
 
-            analyzedComponents[i] = {
-              ...comp,
-              previewHtml: previewResult.html,
-              interactiveElements: interactiveElements.length > 0 ? interactiveElements : undefined,
-            };
+            if (originalIndex !== undefined) {
+              analyzedComponents[originalIndex] = {
+                ...analyzedComponents[originalIndex],
+                previewHtml: previewResult.html,
+                interactiveElements: interactiveElements.length > 0 ? interactiveElements : undefined,
+              };
+            }
 
-            const dbId = dbIdMap.get(`${comp.componentName}::${comp.filePath}`);
+            const dbId = dbIdMap.get(key);
             if (dbId) {
               const { error: updateError } = await supabase.from('discovered_components').update({
                 preview_html: previewResult.html,
@@ -262,11 +394,11 @@ export async function discoverComponents(
               }
             }
           }
-          console.log(`[discovery] Preview ${i + 1}/${analyzedComponents.length}: ${comp.componentName}`);
+          console.log(`[discovery] Preview ${i + 1}/${componentsToProcess.length}: ${comp.componentName}`);
         } catch (error) {
           console.error(`Preview HTML generation failed for ${comp.componentName}:`, error);
         }
-        if (i < analyzedComponents.length - 1) await new Promise(r => setTimeout(r, 150));
+        if (i < componentsToProcess.length - 1) await new Promise(r => setTimeout(r, 150));
       }
     }
 
@@ -274,11 +406,17 @@ export async function discoverComponents(
 
     const withPreview = analyzedComponents.filter(c => c.previewHtml).length;
     const withCategory = analyzedComponents.filter(c => c.category).length;
-    console.log(`[discovery] DONE: ${components.length} found, ${withCategory} categorized, ${withPreview} with preview HTML`);
-    return { success: true, componentsFound: components.length, componentsAnalyzed: withCategory, errors: scanErrors };
+    console.log(`[discovery] DONE: ${components.length} found, ${componentsToProcess.length} analyzed, ${unchangedComponents.length} cached, ${withPreview} with preview`);
+    return {
+      success: true,
+      componentsFound: components.length,
+      componentsAnalyzed: componentsToProcess.length,
+      componentsCached: unchangedComponents.length,
+      errors: scanErrors
+    };
   } catch (error) {
     console.error('[discovery] Component discovery failed:', error);
-    return { success: false, componentsFound: 0, componentsAnalyzed: 0, errors: [{ file: '', error: error instanceof Error ? error.message : 'Unknown error' }] };
+    return { success: false, componentsFound: 0, componentsAnalyzed: 0, componentsCached: 0, errors: [{ file: '', error: error instanceof Error ? error.message : 'Unknown error' }] };
   }
 }
 

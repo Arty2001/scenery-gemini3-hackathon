@@ -85,4 +85,6 @@ export interface RepoContext {
   name: string;
   owner: string;
   description?: string;
+  /** AI model to use for analysis (from project settings) */
+  aiModel?: string;
 }

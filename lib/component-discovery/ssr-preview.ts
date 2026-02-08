@@ -1,4 +1,5 @@
 import { getAIClient } from '@/lib/ai/client';
+import { DEFAULT_MODEL, getModelIdOrDefault, type GeminiModelId } from '@/lib/ai/models';
 import { previewHtmlSchema, toJsonSchema } from './schemas';
 import type { ComponentInfo, RepoContext } from './types';
 import { createMockRequire } from './mock-registry';
@@ -7,6 +8,17 @@ import { bundleForBrowser } from './browser-bundler';
 import { analyzeAndFix, applyFix } from './render-recovery';
 import * as esbuild from 'esbuild';
 import { z } from 'zod';
+
+/**
+ * Get AI model to use for this operation.
+ * Uses project's configured model if available, otherwise falls back to default.
+ */
+function getModelForContext(repoContext?: RepoContext): GeminiModelId {
+  if (repoContext?.aiModel) {
+    return getModelIdOrDefault(repoContext.aiModel);
+  }
+  return DEFAULT_MODEL;
+}
 
 /**
  * Check if source code contains Server Component patterns that can't run in browser.
@@ -200,6 +212,519 @@ const clientCodeSchema = z.object({
   code: z.string().describe('The transformed client-side React component code'),
   success: z.boolean().describe('Whether transformation was successful'),
 });
+
+const pureReactSchema = z.object({
+  code: z.string().describe('The pure React component code with all external dependencies removed'),
+  success: z.boolean().describe('Whether transformation was successful'),
+  notes: z.string().optional().describe('Any notes about what was changed'),
+});
+
+/**
+ * Transform ANY React component into "pure React" that can run in an isolated browser.
+ * This removes ALL external imports and replaces them with inline equivalents.
+ *
+ * Key transformations:
+ * - next/link <Link> → <a>
+ * - next/image <Image> → <img>
+ * - next/navigation useRouter → mock object
+ * - lucide-react icons → inline SVG placeholders
+ * - framer-motion → regular divs/spans
+ * - @radix-ui/* → native HTML equivalents
+ * - Any data fetching → inline mock data
+ * - Server actions → inline mock functions
+ *
+ * The result is a self-contained React component that only needs React to render.
+ */
+async function transformToPureReact(
+  sourceCode: string,
+  componentName: string,
+  demoProps: Record<string, unknown>,
+  modelId?: GeminiModelId
+): Promise<string | null> {
+  try {
+    const ai = getAIClient();
+
+    const prompt = `You are an expert React developer. Your task is to transform a React component into "pure React" that can render in an isolated browser environment with ONLY React available.
+
+## COMPONENT NAME: ${componentName}
+
+## ORIGINAL SOURCE CODE:
+\`\`\`tsx
+${sourceCode}
+\`\`\`
+
+## DEMO PROPS (use these values for any data):
+${JSON.stringify(demoProps, null, 2)}
+
+## YOUR TASK:
+Rewrite this component to be completely self-contained. The ONLY imports allowed are:
+- import React from 'react' (optional, can use global React)
+- import { useState, useEffect, useRef, ... } from 'react' (React hooks only)
+
+EVERYTHING ELSE must be inlined, replaced, or removed.
+
+## TRANSFORMATION RULES:
+
+### 1. NEXT.JS COMPONENTS → HTML
+\`\`\`tsx
+// BEFORE:
+import Link from 'next/link';
+<Link href="/about">About</Link>
+
+// AFTER:
+<a href="/about" style={{ textDecoration: 'none', color: 'inherit' }}>About</a>
+\`\`\`
+
+\`\`\`tsx
+// BEFORE:
+import Image from 'next/image';
+<Image src="/photo.jpg" alt="Photo" width={200} height={150} />
+
+// AFTER:
+<img src="/photo.jpg" alt="Photo" style={{ width: 200, height: 150, objectFit: 'cover' }} />
+\`\`\`
+
+### 2. NEXT.JS NAVIGATION → MOCK VALUES
+\`\`\`tsx
+// BEFORE:
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+const router = useRouter();
+const pathname = usePathname();
+const params = useSearchParams();
+
+// AFTER:
+const router = { push: () => {}, replace: () => {}, back: () => {}, forward: () => {} };
+const pathname = '/';
+const params = { get: () => null, getAll: () => [] };
+\`\`\`
+
+### 3. ICONS (lucide-react, heroicons, etc.) → INLINE SVG
+\`\`\`tsx
+// BEFORE:
+import { ChevronRight, User, Settings } from 'lucide-react';
+<ChevronRight className="w-4 h-4" />
+
+// AFTER (simple placeholder):
+const ChevronRight = ({ className = '', ...props }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+const User = ({ className = '', ...props }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+    <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+  </svg>
+);
+const Settings = ({ className = '', ...props }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" {...props}>
+    <circle cx="12" cy="12" r="3" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" />
+  </svg>
+);
+\`\`\`
+
+### 4. RADIX UI / HEADLESS UI → NATIVE HTML
+\`\`\`tsx
+// BEFORE:
+import { Button } from '@radix-ui/react-button';
+import { Dialog, DialogTrigger, DialogContent } from '@radix-ui/react-dialog';
+
+// AFTER:
+const Button = ({ children, onClick, className, ...props }) => (
+  <button onClick={onClick} className={className} {...props}>{children}</button>
+);
+const Dialog = ({ children, open }) => open ? <div className="dialog-overlay">{children}</div> : null;
+const DialogTrigger = ({ children, onClick }) => <span onClick={onClick}>{children}</span>;
+const DialogContent = ({ children, className }) => (
+  <div className={\`dialog-content \${className}\`} style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', padding: 20, borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+    {children}
+  </div>
+);
+\`\`\`
+
+### 5. FRAMER MOTION → STATIC HTML
+\`\`\`tsx
+// BEFORE:
+import { motion } from 'framer-motion';
+<motion.div animate={{ opacity: 1 }} initial={{ opacity: 0 }}>
+
+// AFTER (just render static):
+<div style={{ opacity: 1 }}>
+\`\`\`
+
+### 6. DATA FETCHING HOOKS → MOCK DATA
+\`\`\`tsx
+// BEFORE:
+import { useQuery } from '@tanstack/react-query';
+const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: fetchUsers });
+
+// AFTER:
+const data = [{ id: '1', name: 'John Doe', email: 'john@example.com' }];
+const isLoading = false;
+\`\`\`
+
+### 7. FORM LIBRARIES → SIMPLE STATE
+\`\`\`tsx
+// BEFORE:
+import { useForm } from 'react-hook-form';
+const { register, handleSubmit } = useForm();
+
+// AFTER:
+const [formData, setFormData] = React.useState({});
+const register = (name) => ({
+  value: formData[name] || '',
+  onChange: (e) => setFormData(prev => ({ ...prev, [name]: e.target.value }))
+});
+const handleSubmit = (onSubmit) => (e) => { e.preventDefault(); onSubmit(formData); };
+\`\`\`
+
+### 8. AUTH HOOKS → MOCK USER
+\`\`\`tsx
+// BEFORE:
+import { useUser, useAuth } from '@clerk/nextjs';
+const { user, isLoaded } = useUser();
+
+// AFTER:
+const user = { id: 'user_1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', imageUrl: 'https://via.placeholder.com/100' };
+const isLoaded = true;
+\`\`\`
+
+### 9. INTERNAL IMPORTS (@/components/*, @/lib/*) → INLINE OR PLACEHOLDER
+For simple UI components, inline them. For complex ones, create a placeholder:
+\`\`\`tsx
+// If you can see what the imported component does, inline it
+// Otherwise, create a simple placeholder:
+const SomeComplexComponent = ({ children, ...props }) => <div {...props}>{children}</div>;
+\`\`\`
+
+### 10. SERVER ACTIONS → MOCK ASYNC FUNCTIONS
+\`\`\`tsx
+// BEFORE:
+import { submitForm } from '@/lib/actions';
+await submitForm(data);
+
+// AFTER:
+const submitForm = async (data) => {
+  console.log('Form submitted:', data);
+  return { success: true };
+};
+\`\`\`
+
+### 11. REMOVE COMPLETELY (these are not needed for preview):
+- 'use client' directive (remove, not needed)
+- 'use server' directive (remove, not needed)
+- import type statements (remove)
+- TypeScript types/interfaces (keep the component working but remove type annotations if they cause issues)
+
+### 12. KEEP AS-IS:
+- All JSX structure
+- All className strings (Tailwind will be converted to inline styles later)
+- All inline styles
+- React.useState, React.useEffect, React.useRef, etc.
+- Event handlers (onClick, onChange, etc.)
+- Conditional rendering
+- .map() calls (but use mock data for arrays)
+
+## OUTPUT FORMAT:
+Return the COMPLETE, WORKING React component code. It should be able to run in a browser with ONLY React available.
+
+Start with any inline component definitions (icons, UI primitives) at the top, then the main component export.
+
+The component must export default the main component.
+
+Example output structure:
+\`\`\`tsx
+// Inline icon components
+const ChevronRight = (props) => <svg {...props}>...</svg>;
+const User = (props) => <svg {...props}>...</svg>;
+
+// Inline UI components
+const Button = ({ children, ...props }) => <button {...props}>{children}</button>;
+
+// Main component
+export default function ${componentName}(props) {
+  // Mock data
+  const items = [...];
+
+  // Mock hooks
+  const router = { push: () => {} };
+
+  return (
+    // Original JSX structure preserved
+  );
+}
+\`\`\``;
+
+    const response = await ai.models.generateContent({
+      model: modelId || DEFAULT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: toJsonSchema(pureReactSchema) as object,
+      },
+    });
+
+    const text = response.text;
+    if (!text) return null;
+
+    const result = pureReactSchema.parse(JSON.parse(text));
+    if (!result.success) {
+      console.log(`[pure-react] ${componentName}: AI reported transformation failed`);
+      return null;
+    }
+
+    // Clean up any remaining issues
+    let code = result.code;
+
+    // Remove 'use client'/'use server' if AI didn't
+    code = code.replace(/['"]use (client|server)['"];?\n?/g, '');
+
+    // Remove any remaining external imports that AI might have missed
+    // Only keep React imports
+    const lines = code.split('\n');
+    const cleanedLines = lines.filter(line => {
+      const trimmed = line.trim();
+      // Keep non-import lines
+      if (!trimmed.startsWith('import ')) return true;
+      // Keep React imports
+      if (/from\s+['"]react['"]/.test(trimmed)) return true;
+      if (/from\s+['"]react\//.test(trimmed)) return true;
+      // Remove all other imports
+      console.log(`[pure-react] ${componentName}: removing leftover import: ${trimmed}`);
+      return false;
+    });
+    code = cleanedLines.join('\n');
+
+    console.log(`[pure-react] ${componentName}: transformation complete${result.notes ? ` (${result.notes})` : ''}`);
+    return code;
+  } catch (error) {
+    console.error(`[pure-react] ${componentName}: transformation failed:`, error);
+    return null;
+  }
+}
+
+/**
+ * Check if a client component uses data fetching that needs mocking.
+ * This catches patterns that aren't server components but still fetch data.
+ */
+function usesDataFetching(sourceCode: string): boolean {
+  const dataFetchingPatterns = [
+    // React Query / TanStack Query
+    /\buseQuery\s*\(/,
+    /\buseMutation\s*\(/,
+    /\buseInfiniteQuery\s*\(/,
+    /\buseSuspenseQuery\s*\(/,
+
+    // SWR
+    /\buseSWR\s*\(/,
+    /\buseSWRMutation\s*\(/,
+    /\buseSWRInfinite\s*\(/,
+
+    // Apollo GraphQL
+    /\buseQuery\s*<.*>\s*\(/,
+    /\buseLazyQuery\s*\(/,
+    /\buseMutation\s*<.*>\s*\(/,
+    /\buseSubscription\s*\(/,
+
+    // URQL
+    /\buseQuery\s*\(\s*\{/,
+
+    // Fetch in useEffect
+    /useEffect\s*\(\s*(?:async\s*)?\(\)\s*=>\s*\{[^}]*fetch\s*\(/,
+    /useEffect\s*\([^)]*\)\s*=>\s*\{[^}]*fetch\s*\(/,
+
+    // Axios in useEffect
+    /useEffect\s*\([^)]*\{[^}]*axios\./,
+
+    // Custom data hooks (common patterns)
+    /\buse[A-Z]\w*Data\s*\(/,
+    /\buse[A-Z]\w*Query\s*\(/,
+    /\buseFetch\w*\s*\(/,
+    /\buseApi\w*\s*\(/,
+    /\buseLoad\w*\s*\(/,
+    /\buseGet\w*\s*\(/,
+
+    // tRPC client
+    /\btrpc\.\w+\.\w+\.useQuery\s*\(/,
+    /\bapi\.\w+\.\w+\.useQuery\s*\(/,
+
+    // Convex client
+    /\buseQuery\s*\(\s*api\./,
+    /\buseMutation\s*\(\s*api\./,
+
+    // Firebase client
+    /\buseCollection\s*\(/,
+    /\buseDocument\s*\(/,
+    /\buseFirestore\w*\s*\(/,
+
+    // Supabase client hooks
+    /\buseSupabase\w*\s*\(/,
+    /supabase\s*\.\s*from\s*\(/,
+  ];
+
+  return dataFetchingPatterns.some(pattern => pattern.test(sourceCode));
+}
+
+/**
+ * Transform a client component that uses data fetching hooks into a static preview.
+ * Replaces useSWR, useQuery, fetch, etc. with mock data.
+ */
+async function transformDataFetchingToMock(
+  sourceCode: string,
+  componentName: string,
+  demoProps: Record<string, unknown>
+): Promise<string | null> {
+  try {
+    const ai = getAIClient();
+
+    const prompt = `Transform this React component that uses data fetching into a static preview component with mock data.
+
+ORIGINAL CODE:
+\`\`\`tsx
+${sourceCode}
+\`\`\`
+
+COMPONENT NAME: ${componentName}
+DEMO PROPS: ${JSON.stringify(demoProps, null, 2)}
+
+YOUR TASK:
+Rewrite this component to work WITHOUT any data fetching. Replace all data fetching hooks/calls with realistic mock data.
+
+## DATA FETCHING PATTERNS TO REPLACE:
+
+### 1. React Query / TanStack Query
+Before: const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: fetchUsers });
+After:  const data = [{ id: "1", name: "John Doe" }, { id: "2", name: "Jane Smith" }];
+        const isLoading = false;
+
+### 2. SWR
+Before: const { data, error, isLoading } = useSWR('/api/users', fetcher);
+After:  const data = [{ id: "1", name: "John Doe" }];
+        const error = null;
+        const isLoading = false;
+
+### 3. Fetch in useEffect
+Before:
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    fetch('/api/data').then(r => r.json()).then(setData);
+  }, []);
+After:
+  const data = { title: "Sample Data", items: ["Item 1", "Item 2"] };
+
+### 4. tRPC / API routes
+Before: const { data } = trpc.users.getAll.useQuery();
+After:  const data = [{ id: "1", name: "User 1" }];
+
+### 5. Loading states
+Before: if (isLoading) return <Skeleton />;
+After:  // Remove loading check - we have data immediately
+
+### 6. Error states
+Before: if (error) return <Error message={error.message} />;
+After:  // Remove error check - no errors with mock data
+
+## RULES:
+
+1. ANALYZE THE JSX to understand what data shape is needed
+   - Look at .map() calls to see array item structure
+   - Look at property access (data.title, user.name) to see object shape
+   - Look at conditional renders to understand optional fields
+
+2. GENERATE REALISTIC MOCK DATA
+   - Use real-looking names, emails, dates, prices
+   - Match the exact structure the component expects
+   - Provide 2-3 items for arrays
+
+3. REMOVE LOADING/ERROR STATES
+   - Delete: if (isLoading) return ...
+   - Delete: if (error) return ...
+   - Delete: if (!data) return ...
+   - The mock data is always available
+
+4. KEEP EVERYTHING ELSE
+   - All imports (except data fetching hooks)
+   - All UI components and styling
+   - All event handlers
+   - All other hooks (useState for UI state, etc.)
+
+5. REMOVE THESE IMPORTS
+   - useSWR, useSWRMutation from 'swr'
+   - useQuery, useMutation from '@tanstack/react-query'
+   - Apollo/URQL query hooks
+   - Any custom data fetching hooks
+
+## EXAMPLE:
+
+Before:
+\`\`\`tsx
+import { useQuery } from '@tanstack/react-query';
+import { UserCard } from './user-card';
+
+export function UserList() {
+  const { data: users, isLoading, error } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => fetch('/api/users').then(r => r.json())
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+  if (!users?.length) return <div>No users</div>;
+
+  return (
+    <div className="grid gap-4">
+      {users.map(user => (
+        <UserCard key={user.id} name={user.name} email={user.email} avatar={user.avatar} />
+      ))}
+    </div>
+  );
+}
+\`\`\`
+
+After:
+\`\`\`tsx
+import { UserCard } from './user-card';
+
+export function UserList() {
+  const users = [
+    { id: "1", name: "Alice Johnson", email: "alice@example.com", avatar: "/avatars/alice.jpg" },
+    { id: "2", name: "Bob Smith", email: "bob@example.com", avatar: "/avatars/bob.jpg" },
+    { id: "3", name: "Carol Williams", email: "carol@example.com", avatar: "/avatars/carol.jpg" },
+  ];
+
+  return (
+    <div className="grid gap-4">
+      {users.map(user => (
+        <UserCard key={user.id} name={user.name} email={user.email} avatar={user.avatar} />
+      ))}
+    </div>
+  );
+}
+\`\`\`
+
+Return the COMPLETE transformed code. Include all necessary imports.`;
+
+    const response = await ai.models.generateContent({
+      model: DEFAULT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: toJsonSchema(clientCodeSchema) as object,
+      },
+    });
+
+    const text = response.text;
+    if (!text) return null;
+
+    const result = clientCodeSchema.parse(JSON.parse(text));
+    if (!result.success) return null;
+
+    console.log(`[transform] ${componentName}: Data fetching → Mock data transformation complete`);
+    return result.code;
+  } catch (error) {
+    console.error(`[transform] ${componentName}: data fetching transformation failed:`, error);
+    return null;
+  }
+}
 
 /**
  * Post-transformation cleanup for patterns that Gemini might miss.
@@ -417,7 +942,7 @@ After:
 Return the COMPLETE transformed code that can render in a browser. Make sure all imports used in the code are included.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: DEFAULT_MODEL,
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -591,7 +1116,7 @@ ${html}
 Return ONLY the converted HTML with inline styles. No explanation.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: DEFAULT_MODEL,
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -607,18 +1132,26 @@ Return ONLY the converted HTML with inline styles. No explanation.`;
     // Wrap in a responsive container that scales content to fit
     const responsiveHtml = `<div style="width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;">${parsed.html}</div>`;
     return responsiveHtml;
-  } catch {
-    return null;
+  } catch (error) {
+    console.error(`[style-conversion] Error converting styles:`, error instanceof Error ? error.message : String(error));
+    // Instead of failing completely, return the original HTML with minimal inline styles wrapper
+    // This allows preview to work even if style conversion fails
+    console.log(`[style-conversion] Falling back to original HTML with basic wrapper`);
+    return `<div style="width: 100%; max-width: 100%; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">${html}</div>`;
   }
 }
 
 /**
  * Render a component using the Playwright worker service.
  * Provides highest accuracy by rendering in a real browser with hooks, context, effects.
+ *
+ * NEW APPROACH: Transform ALL components to "pure React" first using AI.
+ * This removes all external dependencies from the source code itself,
+ * making bundling simple and reliable.
  */
 export async function generatePlaywrightPreviewHtml(
   component: ComponentInfo,
-  _repoContext: RepoContext,
+  repoContext: RepoContext,
   sourceCode: string,
   sourceCodeMap: Record<string, string>,
   repoPath: string
@@ -635,28 +1168,43 @@ export async function generatePlaywrightPreviewHtml(
     return null;
   }
 
-  // Check if this is a Server Component and transform it
-  let codeToBundle = sourceCode;
-  if (isServerComponent(sourceCode)) {
-    console.log(`[playwright-preview] ${component.componentName}: detected Server Component, transforming...`);
-    const transformedCode = await transformServerToClient(
-      sourceCode,
-      component.componentName,
-      component.demoProps
-    );
-    if (transformedCode) {
-      codeToBundle = transformedCode;
-      // Also update the sourceCodeMap so imports resolve correctly
-      const componentPath = Object.keys(sourceCodeMap).find(
-        p => sourceCodeMap[p] === sourceCode
-      );
-      if (componentPath) {
-        sourceCodeMap[componentPath] = transformedCode;
-      }
-    } else {
-      console.log(`[playwright-preview] ${component.componentName}: transformation failed, skipping Playwright`);
-      return null;
-    }
+  // Get AI model from project settings
+  const modelId = getModelForContext(repoContext);
+  console.log(`[playwright-preview] ${component.componentName}: using AI model: ${modelId}`);
+
+  // Log component details for debugging
+  console.log(`[playwright-preview] ${component.componentName}: starting pure React transformation...`);
+  console.log(`[playwright-preview] ${component.componentName}: source length: ${sourceCode.length} chars`);
+  console.log(`[playwright-preview] ${component.componentName}: demoProps: ${JSON.stringify(component.demoProps, null, 2)}`);
+
+  // NEW APPROACH: Transform ALL components to "pure React" using AI
+  // This removes ALL external imports and replaces them with inline equivalents
+  // Much more reliable than trying to mock everything in the bundle
+  console.log(`[playwright-preview] ${component.componentName}: transforming to pure React...`);
+
+  const pureReactCode = await transformToPureReact(
+    sourceCode,
+    component.componentName,
+    component.demoProps,
+    modelId
+  );
+
+  if (!pureReactCode) {
+    console.log(`[playwright-preview] ${component.componentName}: pure React transformation FAILED, skipping Playwright`);
+    return null;
+  }
+
+  console.log(`[playwright-preview] ${component.componentName}: pure React transformation SUCCESS`);
+  console.log(`[playwright-preview] ${component.componentName}: TRANSFORMED CODE:\n========================================\n${pureReactCode}\n========================================`);
+
+  const codeToBundle = pureReactCode;
+
+  // Update the sourceCodeMap so any self-imports resolve correctly
+  const componentPath = Object.keys(sourceCodeMap).find(
+    p => sourceCodeMap[p] === sourceCode
+  );
+  if (componentPath) {
+    sourceCodeMap[componentPath] = pureReactCode;
   }
 
   console.log(`[playwright-preview] ${component.componentName}: bundling for browser...`);
@@ -686,7 +1234,8 @@ export async function generatePlaywrightPreviewHtml(
 
   // If render failed, use AI to analyze the component holistically and fix it
   // Template already handles most issues, but some components need specific props/data
-  const MAX_RECOVERY_ATTEMPTS = 2;
+  // We try up to 4 times (matching render-recovery.ts which only skips after 4+ failures)
+  const MAX_RECOVERY_ATTEMPTS = 4;
   let currentProps = { ...component.demoProps };
   let accumulatedSetup = '';
 
@@ -694,7 +1243,14 @@ export async function generatePlaywrightPreviewHtml(
     const errorMsg = renderResult.error || 'Unknown render error';
     const consoleLog = renderResult.consoleLog || '';
 
-    console.log(`[playwright-preview] ${component.componentName}: render failed (attempt ${attempt + 1}): ${errorMsg}`);
+    console.log(`[playwright-preview] ${component.componentName}: render failed (attempt ${attempt + 1})`);
+    console.log(`[playwright-preview] ${component.componentName}: error: ${errorMsg}`);
+    if (consoleLog) {
+      console.log(`[playwright-preview] ${component.componentName}: browser console:\n    ${consoleLog.split('; ').join('\n    ')}`);
+    }
+
+    // Log the full code that failed
+    console.log(`[playwright-preview] ${component.componentName}: CODE THAT FAILED:\n========================================\n${codeToBundle}\n========================================`);
 
     // Ask AI to analyze the whole component and suggest fixes
     const fix = await analyzeAndFix(
@@ -717,8 +1273,25 @@ export async function generatePlaywrightPreviewHtml(
                        fix.mockCode.length > 0;
 
     if (!hasChanges) {
-      console.log(`[playwright-preview] ${component.componentName}: AI found no fixes to apply`);
-      return null;
+      console.log(`[playwright-preview] ${component.componentName}: AI found no fixes to apply, trying default recovery`);
+
+      // Default recovery: add common props that might be missing
+      // For React #130 errors with pure React code, the issue is often in the bundle/runtime
+      // Try adding a mock code that ensures window.React is available
+      const defaultMockCode = `
+        // Default recovery - ensure React is available
+        if (typeof window.React === 'undefined') {
+          console.error('[recovery] window.React is undefined! This should not happen.');
+        }
+        // Ensure jsx/jsxs are available
+        if (typeof jsx === 'undefined' && typeof window.React !== 'undefined') {
+          window.jsx = window.React.createElement;
+          window.jsxs = window.React.createElement;
+        }
+      `;
+      accumulatedSetup += defaultMockCode;
+
+      // Continue with the recovery attempt instead of returning null
     }
 
     // Apply the fixes
@@ -728,8 +1301,21 @@ export async function generatePlaywrightPreviewHtml(
 
     console.log(`[playwright-preview] ${component.componentName}: applying AI fix - ${fix.reason}`);
 
-    // Rebuild with fixes
-    const fixedBundle = accumulatedSetup + '\n' + bundleResult.bundledJs;
+    // Rebuild with fixes - wrap mockCode safely to prevent script parse errors
+    // AI might generate invalid top-level code like "return null;" which would crash the entire script
+    const safeMockCode = accumulatedSetup.trim()
+      ? `
+// AI Recovery MockCode (wrapped in IIFE for safety)
+try {
+  (function() {
+    ${accumulatedSetup}
+  })();
+} catch (_mockErr) {
+  console.warn('[mockCode] AI recovery code failed:', _mockErr.message);
+}
+`
+      : '';
+    const fixedBundle = safeMockCode + bundleResult.bundledJs;
 
     // Retry render
     renderResult = await playwrightClient.renderWithRetry({
@@ -765,8 +1351,39 @@ export async function generatePlaywrightPreviewHtml(
 }
 
 /**
+ * Check if component has imports that absolutely cannot be handled.
+ * With the new pure React transformation, most "problematic" imports are now handled.
+ * Only truly unrenderable components (3D, Canvas, etc.) should be skipped.
+ */
+function hasUnrenderablePatterns(sourceCode: string): boolean {
+  const unrenerablePatterns = [
+    // 3D/Canvas - these require WebGL context and complex setup
+    /import\s+.*from\s+['"]@react-three/,
+    /import\s+.*from\s+['"]three['"]/,
+    /import\s+.*from\s+['"]@babylonjs/,
+
+    // Real-time communication - require actual connections
+    /import\s+.*from\s+['"]socket\.io/,
+    /import\s+.*from\s+['"]@liveblocks/,
+    /import\s+.*from\s+['"]@ably/,
+
+    // Media capture - requires actual hardware
+    /getUserMedia/,
+    /navigator\.mediaDevices/,
+
+    // WebRTC
+    /RTCPeerConnection/,
+    /import\s+.*from\s+['"]simple-peer/,
+  ];
+
+  return unrenerablePatterns.some(pattern => pattern.test(sourceCode));
+}
+
+/**
  * Hybrid preview generation pipeline.
- * Tries Playwright first (highest accuracy), then SSR, then falls back to null for AI-only.
+ * NEW APPROACH: Uses AI to transform components to "pure React" first, then renders in Playwright.
+ * This handles ALL components including those with Next.js imports, data fetching, auth, etc.
+ * Only truly unrenderable components (3D, WebRTC, etc.) are skipped.
  */
 export async function generateHybridPreviewHtml(
   component: ComponentInfo,
@@ -781,9 +1398,18 @@ export async function generateHybridPreviewHtml(
     return null;
   }
 
-  // Step 1: Try Playwright rendering (highest accuracy)
-  if (repoPath && relatedSourceCode && playwrightClient.isConfigured()) {
-    console.log(`[preview] ${component.componentName}: trying Playwright...`);
+  // Only skip truly unrenderable components (3D, WebRTC, etc.)
+  if (hasUnrenderablePatterns(sourceCode)) {
+    console.log(`[preview] ${component.componentName}: has unrenderable patterns (3D/WebRTC/etc.) → AI generation`);
+    return null; // Will trigger AI-only fallback
+  }
+
+  // Step 1: Try Playwright rendering with pure React transformation
+  // This now handles ALL components by transforming them to pure React first
+  const playwrightConfigured = playwrightClient.isConfigured();
+  console.log(`[preview] ${component.componentName}: trying Playwright with pure React transformation (configured: ${playwrightConfigured})`);
+
+  if (repoPath && relatedSourceCode && playwrightConfigured) {
     const playwrightResult = await generatePlaywrightPreviewHtml(
       component,
       repoContext,
@@ -793,9 +1419,12 @@ export async function generateHybridPreviewHtml(
     );
 
     if (playwrightResult) {
+      console.log(`[preview] ${component.componentName}: Playwright SUCCESS`);
       return playwrightResult;
     }
     console.log(`[preview] ${component.componentName}: Playwright failed, trying SSR...`);
+  } else {
+    console.log(`[preview] ${component.componentName}: skipping Playwright (missing: ${!repoPath ? 'repoPath ' : ''}${!relatedSourceCode ? 'relatedCode ' : ''}${!playwrightConfigured ? 'config ' : ''})`);
   }
 
   // Step 2: Try SSR rendering (fast, limited compatibility)

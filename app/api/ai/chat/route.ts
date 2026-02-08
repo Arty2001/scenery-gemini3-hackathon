@@ -5,6 +5,7 @@ import { compositionTools } from '@/lib/ai/composition-tools';
 import { Type } from '@google/genai';
 import { generateVideo, type ComponentInfo, type AvailableAsset } from '@/lib/ai/video-generation';
 import { listProjectAssets } from '@/lib/actions/assets';
+import { DEFAULT_MODEL, type GeminiModelId } from '@/lib/ai/models';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -17,12 +18,12 @@ interface ChatRequest {
 }
 
 // JSON schema for composition generation (second Gemini call)
+// Note: width/height intentionally excluded - AI should not change canvas dimensions
 const compositionJsonSchema = {
   type: Type.OBJECT,
   properties: {
     name: { type: Type.STRING },
-    width: { type: Type.NUMBER },
-    height: { type: Type.NUMBER },
+    // width and height excluded - canvas size is controlled by user
     fps: { type: Type.NUMBER },
     durationInFrames: { type: Type.NUMBER },
     tracks: {
@@ -67,7 +68,7 @@ const compositionJsonSchema = {
       },
     },
   },
-  required: ['name', 'tracks', 'durationInFrames', 'fps', 'width', 'height'],
+  required: ['name', 'tracks', 'durationInFrames', 'fps'],
 };
 
 export async function POST(request: NextRequest) {
@@ -86,8 +87,12 @@ export async function POST(request: NextRequest) {
     const ai = getAIClient();
     const systemPrompt = buildSystemPrompt(compositionContext);
 
+    // Use project's AI model or fall back to default
+    const modelId = (compositionContext.aiModel as GeminiModelId) || DEFAULT_MODEL;
+    console.log(`[Chat API] Using model: ${modelId} (project setting: ${compositionContext.aiModel ?? 'not set'}, default: ${DEFAULT_MODEL})`);
+
     const stream = await ai.models.generateContentStream({
-      model: 'gemini-3-flash-preview',
+      model: modelId,
       contents: messages,
       config: {
         systemInstruction: systemPrompt,
@@ -182,6 +187,7 @@ export async function POST(request: NextRequest) {
                       availableAssets,
                       minQualityScore: 90,
                       maxRefinementIterations: 5,
+                      modelId,
                     },
                     (progressMessage) => {
                       controller.enqueue(
@@ -204,20 +210,33 @@ export async function POST(request: NextRequest) {
                         durationInFrames: Math.round(compositionContext.fps * 0.5), // 0.5s transition
                       } : undefined;
 
+                      // Ensure durationInFrames is a number (AI sometimes returns objects)
+                      let duration = detailedScene.durationInFrames;
+                      if (typeof duration !== 'number') {
+                        console.warn(`[Video Gen] Scene ${detailedScene.sceneId} has invalid durationInFrames:`, duration);
+                        // Try to extract if it's wrapped in an object
+                        if (duration && typeof duration === 'object' && 'durationInFrames' in duration) {
+                          duration = (duration as { durationInFrames: number }).durationInFrames;
+                        } else {
+                          duration = Math.round(compositionContext.fps * 5); // Fallback: 5 seconds
+                        }
+                      }
+
                       return {
                         id: detailedScene.sceneId,
                         name: sceneName,
-                        startFrame: detailedScene.from,
-                        durationInFrames: detailedScene.durationInFrames,
+                        startFrame: typeof detailedScene.from === 'number' ? detailedScene.from : 0,
+                        durationInFrames: duration,
                         transition,
                         backgroundColor: '#000000',
                       };
                     }) ?? [];
 
+                    // Note: Do NOT include width/height here - they should remain unchanged
+                    // The AI should only control content (tracks/scenes), not canvas dimensions
                     const compositionData = {
                       name: result.videoPlan?.title ?? 'Generated Video',
-                      width: compositionContext.width,
-                      height: compositionContext.height,
+                      // width and height intentionally omitted - preserve user's canvas size
                       fps: compositionContext.fps,
                       durationInFrames: result.composition?.durationInFrames ?? Math.round(durationInSeconds * compositionContext.fps),
                       tracks: result.tracks,
@@ -271,7 +290,7 @@ export async function POST(request: NextRequest) {
                 const genDuration = (genArgs.durationInFrames as number) ?? compositionContext.durationInFrames;
 
                 const compositionResponse = await ai.models.generateContent({
-                  model: 'gemini-3-flash-preview',
+                  model: modelId,
                   contents: `Generate a video composition JSON for: "${description}".
 
 Target: ${genWidth}x${genHeight}, ${genFps}fps, ${genDuration} frames.
@@ -327,6 +346,9 @@ STRICT RULES:
                           : [],
                       }));
                   }
+                  // Remove width/height - AI should not change canvas dimensions
+                  delete compositionData.width;
+                  delete compositionData.height;
                   controller.enqueue(
                     encoder.encode(
                       `data: ${JSON.stringify({ type: 'composition', data: compositionData })}\n\n`
