@@ -175,6 +175,7 @@ export async function getOrCreateComposition(
 /**
  * Save composition state to database.
  * Partial updates supported - only provided fields are updated.
+ * Demo projects are READ-ONLY - saves are silently ignored.
  */
 export async function saveComposition(
   compositionId: string,
@@ -195,9 +196,20 @@ export async function saveComposition(
 
   const supabase = await createClient();
 
-  // RLS handles permission:
-  // - Authenticated users can update their own project compositions
-  // - Anyone can update demo project compositions
+  // Look up the project_id for this composition to check if it's a demo
+  const { data: composition } = await supabase
+    .from('compositions')
+    .select('project_id')
+    .eq('id', compositionId)
+    .single();
+
+  // Demo projects are READ-ONLY - silently succeed without saving
+  if (composition && isDemoProject(composition.project_id)) {
+    console.log('[SaveComposition] Demo project - save blocked (read-only)');
+    return { success: true };
+  }
+
+  // RLS handles permission for non-demo projects
 
   // Build update object with only provided fields
   const updateData: Record<string, unknown> = {};

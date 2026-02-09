@@ -56,6 +56,22 @@ interface EditorClientProps {
     width: number;
     height: number;
   };
+  /** Demo mode - read-only, saving disabled */
+  isDemo?: boolean;
+}
+
+// =============================================
+// Demo Mode Indicator
+// =============================================
+
+function DemoModeIndicator() {
+  return (
+    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-600 text-sm font-medium">
+      <span>Demo Mode</span>
+      <span className="text-amber-500/70">•</span>
+      <span className="text-amber-500/80 font-normal">Read Only</span>
+    </div>
+  );
 }
 
 // =============================================
@@ -119,7 +135,7 @@ function SaveStatusIndicator({
 // Component
 // =============================================
 
-export function EditorClient({ composition }: EditorClientProps) {
+export function EditorClient({ composition, isDemo = false }: EditorClientProps) {
   useKeyboardShortcuts();
   const previewRef = useRef<RemotionPreviewHandle>(null);
   const loadComposition = useCompositionStore((s) => s.loadComposition);
@@ -258,12 +274,16 @@ export function EditorClient({ composition }: EditorClientProps) {
             <Film className="h-4 w-4" />
             Export
           </button>
-          <SaveStatusIndicator
-            status={saveState.status}
-            lastSaved={saveState.lastSaved}
-            hasUnsavedChanges={saveState.hasUnsavedChanges}
-            onSave={saveState.saveNow}
-          />
+          {isDemo ? (
+            <DemoModeIndicator />
+          ) : (
+            <SaveStatusIndicator
+              status={saveState.status}
+              lastSaved={saveState.lastSaved}
+              hasUnsavedChanges={saveState.hasUnsavedChanges}
+              onSave={saveState.saveNow}
+            />
+          )}
         </div>
       </div>
 

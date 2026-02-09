@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getProject } from '@/lib/actions/projects';
 import { getOrCreateComposition } from '@/lib/actions/compositions';
+import { isDemoProject } from '@/lib/demo-projects';
 import { EditorClient } from './editor-client';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -45,7 +46,7 @@ export default async function EditorPage({ params }: PageProps) {
           </div>
         </div>
       </header>
-      <EditorClient composition={composition} />
+      <EditorClient composition={composition} isDemo={isDemoProject(projectId)} />
     </div>
   );
 }
