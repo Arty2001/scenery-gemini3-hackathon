@@ -18,8 +18,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build Next.js
+# Build Next.js - NEXT_PUBLIC_ vars must be available at build time
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_SUPABASE_URL=https://gtvcigyldfjrwzqeymes.supabase.co
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0dmNpZ3lsZGZqcnd6cWV5bWVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjg0MTIsImV4cCI6MjA4NDk0NDQxMn0.u3BhSqpgCMkeFvR1rOWsCZyZVpqkZylFO0sUYkLqdT4
 RUN npm run build
 
 # Production image

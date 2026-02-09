@@ -219,6 +219,161 @@ const pureReactSchema = z.object({
   notes: z.string().optional().describe('Any notes about what was changed'),
 });
 
+const previewVerificationSchema = z.object({
+  isValid: z.boolean().describe('Whether the preview HTML correctly represents the component'),
+  reason: z.string().describe('Brief explanation of why it is or is not valid'),
+  issues: z.array(z.string()).optional().describe('List of specific issues found'),
+});
+
+const generatedPreviewSchema = z.object({
+  html: z.string().describe('The generated HTML preview of the component'),
+  success: z.boolean().describe('Whether generation was successful'),
+});
+
+/**
+ * Verify that a Playwright-rendered preview actually matches what the component should look like.
+ * Detects loading states, skeletons, empty renders, and other bad captures.
+ */
+async function verifyPreviewContent(
+  componentName: string,
+  sourceCode: string,
+  previewHtml: string,
+  modelId?: GeminiModelId
+): Promise<{ isValid: boolean; reason: string }> {
+  try {
+    const ai = getAIClient();
+
+    const prompt = `You are reviewing a component preview to check if it rendered correctly.
+
+## COMPONENT NAME: ${componentName}
+
+## ORIGINAL SOURCE CODE:
+\`\`\`tsx
+${sourceCode.slice(0, 3000)}${sourceCode.length > 3000 ? '\n... (truncated)' : ''}
+\`\`\`
+
+## RENDERED PREVIEW HTML:
+\`\`\`html
+${previewHtml.slice(0, 2000)}${previewHtml.length > 2000 ? '\n... (truncated)' : ''}
+\`\`\`
+
+## YOUR TASK:
+Determine if the preview HTML correctly represents the component. Mark as INVALID if you see any of these issues:
+
+1. **Loading States**: Spinners, "Loading...", skeleton placeholders, pulse animations
+2. **Empty/Minimal Content**: Just wrapper divs with no real content, or content that's way too short for what the component should show
+3. **Error States**: Error messages, "Something went wrong", fallback UI
+4. **Missing Key Elements**: The source shows buttons/forms/cards but the preview doesn't have them
+5. **Suspense Fallbacks**: React Suspense fallback content instead of actual component
+6. **Placeholder Text**: Lorem ipsum, "placeholder", demo text that doesn't match source
+
+Mark as VALID if:
+- The preview shows actual UI elements that match the source code structure
+- Interactive elements (buttons, inputs, links) are present
+- The content structure roughly matches what the JSX describes
+- Even if styling is different, the semantic content is correct
+
+Be strict - if in doubt, mark as INVALID. It's better to regenerate than show a bad preview.`;
+
+    const response = await ai.models.generateContent({
+      model: modelId || DEFAULT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: toJsonSchema(previewVerificationSchema) as object,
+        temperature: 0.1, // Low temperature for consistent judgment
+      },
+    });
+
+    const text = response.text;
+    if (!text) {
+      return { isValid: true, reason: 'Verification failed, assuming valid' };
+    }
+
+    const result = previewVerificationSchema.parse(JSON.parse(text));
+    console.log(`[verify-preview] ${componentName}: ${result.isValid ? 'VALID' : 'INVALID'} - ${result.reason}`);
+
+    return { isValid: result.isValid, reason: result.reason };
+  } catch (error) {
+    console.error(`[verify-preview] ${componentName}: verification error:`, error);
+    // On error, assume valid to avoid blocking
+    return { isValid: true, reason: 'Verification error, assuming valid' };
+  }
+}
+
+/**
+ * Generate preview HTML directly from source code using Gemini.
+ * Used as a fallback when Playwright produces a bad render or fails.
+ */
+async function generatePreviewHtmlFromSource(
+  componentName: string,
+  sourceCode: string,
+  demoProps: Record<string, unknown>,
+  modelId?: GeminiModelId
+): Promise<string | null> {
+  try {
+    const ai = getAIClient();
+
+    const prompt = `You are an expert at generating HTML previews of React components. Generate a static HTML representation of this component that shows what it would look like when rendered.
+
+## COMPONENT NAME: ${componentName}
+
+## SOURCE CODE:
+\`\`\`tsx
+${sourceCode}
+\`\`\`
+
+## DEMO PROPS:
+${JSON.stringify(demoProps, null, 2)}
+
+## YOUR TASK:
+Generate the HTML that this component would produce when rendered with the demo props.
+
+## RULES:
+1. **Use inline styles** - Convert all Tailwind/CSS classes to inline style attributes
+2. **Include realistic content** - Use the demo props values, don't use placeholders
+3. **Preserve structure** - Match the JSX structure as closely as possible
+4. **Keep interactive elements** - Include buttons, inputs, links with proper attributes
+5. **Add data-testid** - Add data-testid attributes to interactive elements for targeting
+6. **Make it responsive** - Root element should have: width: 100%; max-width: 100%; box-sizing: border-box;
+7. **Expand dynamic content** - If there's a .map() over an array, show 2-3 example items
+
+## STYLE REFERENCE:
+- Use modern CSS: flexbox, grid, border-radius, box-shadow
+- Common colors: #171717 (dark), #737373 (muted), #f5f5f5 (light bg), #ffffff (white)
+- Font: font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
+- Spacing: 4px, 8px, 12px, 16px, 24px, 32px
+- Rounded: 4px, 6px, 8px, 12px
+
+Return ONLY the HTML, no wrapper, no explanation. Start directly with the component's root element.`;
+
+    const response = await ai.models.generateContent({
+      model: modelId || DEFAULT_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: toJsonSchema(generatedPreviewSchema) as object,
+        thinkingConfig: { thinkingBudget: 5000 }, // Use thinking for better output
+      },
+    });
+
+    const text = response.text;
+    if (!text) return null;
+
+    const result = generatedPreviewSchema.parse(JSON.parse(text));
+    if (!result.success || !result.html) return null;
+
+    // Wrap in responsive container
+    const wrappedHtml = `<div style="width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;">${result.html}</div>`;
+
+    console.log(`[ai-preview] ${componentName}: generated preview (${wrappedHtml.length} chars)`);
+    return wrappedHtml;
+  } catch (error) {
+    console.error(`[ai-preview] ${componentName}: generation failed:`, error);
+    return null;
+  }
+}
+
 /**
  * Transform ANY React component into "pure React" that can run in an isolated browser.
  * This removes ALL external imports and replaces them with inline equivalents.
@@ -1333,13 +1488,55 @@ try {
 
   // Final check
   if (!renderResult.success || !renderResult.html) {
-    console.log(`[playwright-preview] ${component.componentName}: all recovery attempts failed`);
+    console.log(`[playwright-preview] ${component.componentName}: all recovery attempts failed, trying AI generation...`);
+
+    // Fallback: Generate preview directly from source code using AI
+    const aiPreview = await generatePreviewHtmlFromSource(
+      component.componentName,
+      sourceCode,
+      component.demoProps,
+      modelId
+    );
+
+    if (aiPreview) {
+      console.log(`[playwright-preview] ${component.componentName}: AI fallback succeeded`);
+      return { html: aiPreview, method: 'playwright' };
+    }
+
     return null;
   }
 
-  console.log(`[playwright-preview] ${component.componentName}: render success (${renderResult.html.length} chars, ${renderResult.renderTime}ms), converting styles...`);
+  console.log(`[playwright-preview] ${component.componentName}: render success (${renderResult.html.length} chars, ${renderResult.renderTime}ms), verifying content...`);
 
-  // Step 3: Convert Tailwind classes to inline styles
+  // Step 3: Verify the preview content is actually correct (not a loading state, etc.)
+  const verification = await verifyPreviewContent(
+    component.componentName,
+    sourceCode,
+    renderResult.html,
+    modelId
+  );
+
+  // If preview is invalid, regenerate using AI
+  if (!verification.isValid) {
+    console.log(`[playwright-preview] ${component.componentName}: preview invalid (${verification.reason}), regenerating with AI...`);
+
+    const aiPreview = await generatePreviewHtmlFromSource(
+      component.componentName,
+      sourceCode,
+      component.demoProps,
+      modelId
+    );
+
+    if (aiPreview) {
+      console.log(`[playwright-preview] ${component.componentName}: AI regeneration succeeded`);
+      return { html: aiPreview, method: 'playwright' };
+    }
+
+    // If AI also fails, use the original (bad) preview as last resort
+    console.log(`[playwright-preview] ${component.componentName}: AI regeneration failed, using original preview`);
+  }
+
+  // Step 4: Convert Tailwind classes to inline styles
   const convertedHtml = await convertClassNamesToInlineStyles(renderResult.html);
   if (!convertedHtml) {
     console.log(`[playwright-preview] ${component.componentName}: style conversion failed`);

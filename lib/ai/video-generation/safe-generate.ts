@@ -38,11 +38,28 @@ export class SafeGenerateError extends Error {
     message: string,
     public readonly attempts: number,
     public readonly lastError: unknown,
-    public readonly zodErrors?: z.ZodError
+    public readonly zodErrors?: z.ZodError,
+    public readonly isRateLimitError?: boolean
   ) {
     super(message);
     this.name = 'SafeGenerateError';
   }
+}
+
+/**
+ * Check if an error is a rate limit / quota exhaustion error from Gemini API.
+ */
+export function isRateLimitError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return (
+    msg.includes('429') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('too many requests') ||
+    msg.includes('resourceexhausted')
+  );
 }
 
 /**
@@ -130,13 +147,26 @@ export async function safeGenerate<T>(
       lastError = error;
 
       // Check if we should retry
-      const isNetworkError =
+      const isNetworkErr =
         error instanceof Error &&
         (error.message.includes('fetch failed') ||
           error.message.includes('ECONNRESET') ||
           error.message.includes('timeout'));
 
       const isZodError = error instanceof z.ZodError;
+      const isRateLimit = isRateLimitError(error);
+
+      // Don't retry rate limit errors - fail fast with clear message
+      if (isRateLimit) {
+        console.error(`[safeGenerate] Rate limit hit on attempt ${attempt + 1}`);
+        throw new SafeGenerateError(
+          'AI rate limit exceeded. Please wait a moment and try again, or switch to a different model.',
+          attempts,
+          error,
+          undefined,
+          true
+        );
+      }
 
       if (attempt < maxRetries) {
         if (isZodError) {
@@ -156,7 +186,7 @@ Generate a valid response that matches the schema exactly.`;
           console.log(
             `[safeGenerate] Attempt ${attempt + 1} failed Zod validation, retrying with feedback...`
           );
-        } else if (isNetworkError) {
+        } else if (isNetworkErr) {
           // Wait before retry with exponential backoff
           await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
           console.log(
@@ -179,7 +209,8 @@ Generate a valid response that matches the schema exactly.`;
     `Failed after ${attempts} attempts: ${lastError instanceof Error ? lastError.message : 'Unknown error'}`,
     attempts,
     lastError,
-    zodErrors
+    zodErrors,
+    isRateLimitError(lastError)
   );
 }
 
@@ -238,13 +269,27 @@ export async function safeGenerateWithTools<T>(
     } catch (error) {
       lastError = error;
 
-      const isNetworkError =
+      const isNetworkErr =
         error instanceof Error &&
         (error.message.includes('fetch failed') ||
           error.message.includes('ECONNRESET') ||
           error.message.includes('timeout'));
 
-      if (attempt < maxRetries && isNetworkError) {
+      const isRateLimit = isRateLimitError(error);
+
+      // Don't retry rate limit errors - fail fast with clear message
+      if (isRateLimit) {
+        console.error(`[safeGenerateWithTools] Rate limit hit on attempt ${attempt + 1}`);
+        throw new SafeGenerateError(
+          'AI rate limit exceeded. Please wait a moment and try again, or switch to a different model.',
+          attempts,
+          error,
+          undefined,
+          true
+        );
+      }
+
+      if (attempt < maxRetries && isNetworkErr) {
         await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
         console.log(
           `[safeGenerateWithTools] Attempt ${attempt + 1} network error, retrying...`
@@ -257,6 +302,8 @@ export async function safeGenerateWithTools<T>(
   throw new SafeGenerateError(
     `Failed after ${attempts} attempts: ${lastError instanceof Error ? lastError.message : 'Unknown error'}`,
     attempts,
-    lastError
+    lastError,
+    undefined,
+    isRateLimitError(lastError)
   );
 }

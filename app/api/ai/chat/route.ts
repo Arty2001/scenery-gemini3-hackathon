@@ -6,6 +6,7 @@ import { Type } from '@google/genai';
 import { generateVideo, type ComponentInfo, type AvailableAsset } from '@/lib/ai/video-generation';
 import { listProjectAssets } from '@/lib/actions/assets';
 import { DEFAULT_MODEL, type GeminiModelId } from '@/lib/ai/models';
+import { isRateLimitError, SafeGenerateError } from '@/lib/ai/video-generation/safe-generate';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -266,9 +267,16 @@ export async function POST(request: NextRequest) {
                 } catch (err) {
                   const errMsg = err instanceof Error ? err.message : String(err);
                   console.error('[ProductVideo] Error:', errMsg);
+
+                  // Check for rate limit error and show clear message
+                  let displayMsg = errMsg.slice(0, 200);
+                  if (isRateLimitError(err) || (err instanceof SafeGenerateError && err.isRateLimitError)) {
+                    displayMsg = '⚠️ AI rate limit exceeded. Please wait a moment and try again, or switch to a different model in Project Settings.';
+                  }
+
                   controller.enqueue(
                     encoder.encode(
-                      `data: ${JSON.stringify({ type: 'text', content: `Failed to generate video: ${errMsg.slice(0, 200)}` })}\n\n`
+                      `data: ${JSON.stringify({ type: 'text', content: `Failed to generate video: ${displayMsg}` })}\n\n`
                     )
                   );
                 }
@@ -390,9 +398,20 @@ STRICT RULES:
           controller.close();
         } catch (streamError) {
           console.error('Stream error:', streamError);
+
+          // Check for rate limit errors and surface with clear message
+          let errorMessage = 'Stream interrupted';
+          if (streamError instanceof SafeGenerateError && streamError.isRateLimitError) {
+            errorMessage = '⚠️ AI rate limit exceeded. Please wait a moment and try again, or switch to a different model in Project Settings.';
+          } else if (isRateLimitError(streamError)) {
+            errorMessage = '⚠️ AI rate limit exceeded. Please wait a moment and try again, or switch to a different model in Project Settings.';
+          } else if (streamError instanceof Error) {
+            errorMessage = streamError.message;
+          }
+
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: 'error', message: 'Stream interrupted' })}\n\n`
+              `data: ${JSON.stringify({ type: 'error', message: errorMessage })}\n\n`
             )
           );
           controller.close();
@@ -409,6 +428,15 @@ STRICT RULES:
     });
   } catch (error) {
     console.error('Chat API error:', error);
+
+    // Check for rate limit errors
+    if (isRateLimitError(error) || (error instanceof SafeGenerateError && error.isRateLimitError)) {
+      return NextResponse.json(
+        { error: 'AI rate limit exceeded. Please wait a moment and try again, or switch to a different model in Project Settings.' },
+        { status: 429 }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

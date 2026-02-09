@@ -34,6 +34,9 @@ export {
 } from './refinement-agent';
 export type { RefinementIssue, RefinementResult } from './refinement-agent';
 
+// Safe generation utilities
+export { SafeGenerateError, isRateLimitError } from './safe-generate';
+
 // Types
 export type {
   VideoPlan,

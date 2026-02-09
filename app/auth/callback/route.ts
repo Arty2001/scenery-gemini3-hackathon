@@ -19,18 +19,25 @@ export async function GET(request: NextRequest) {
   const error = requestUrl.searchParams.get('error')
   const errorDescription = requestUrl.searchParams.get('error_description')
 
+  // Get the real origin from forwarded headers (for Fly.io/Docker)
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') ?? 'https'
+  const origin = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : requestUrl.origin
+
   // Handle OAuth errors (e.g., user denied access)
   if (error) {
     console.error('OAuth error:', error, errorDescription)
     return NextResponse.redirect(
-      new URL(`/auth/login?error=${encodeURIComponent(errorDescription || error)}`, requestUrl.origin)
+      new URL(`/auth/login?error=${encodeURIComponent(errorDescription || error)}`, origin)
     )
   }
 
   if (!code) {
     console.error('No authorization code provided')
     return NextResponse.redirect(
-      new URL('/auth/login?error=No authorization code', requestUrl.origin)
+      new URL('/auth/login?error=No authorization code', origin)
     )
   }
 
@@ -41,7 +48,7 @@ export async function GET(request: NextRequest) {
   if (exchangeError) {
     console.error('Failed to exchange code for session:', exchangeError)
     return NextResponse.redirect(
-      new URL(`/auth/login?error=${encodeURIComponent(exchangeError.message)}`, requestUrl.origin)
+      new URL(`/auth/login?error=${encodeURIComponent(exchangeError.message)}`, origin)
     )
   }
 
@@ -69,5 +76,5 @@ export async function GET(request: NextRequest) {
   }
 
   // Successful authentication - redirect to protected area
-  return NextResponse.redirect(new URL(next, requestUrl.origin))
+  return NextResponse.redirect(new URL(next, origin))
 }
