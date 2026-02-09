@@ -1,611 +1,434 @@
-<h1 align="center">🎬 Scenery</h1>
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React">
+  <img src="https://img.shields.io/badge/Gemini_3-8_Integrations-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini 3">
+  <img src="https://img.shields.io/badge/Remotion-4.0-6C47FF?style=flat-square" alt="Remotion">
+  <img src="https://img.shields.io/badge/Fly.io-Deployed-7C3AED?style=flat-square" alt="Fly.io">
+</p>
+
+<h1 align="center">Scenery</h1>
 
 <p align="center">
-  <strong>AI-Powered Video Generation for React Component Libraries</strong>
+  <strong>Your component library already has the design. Scenery turns it into the video.</strong>
 </p>
 
 <p align="center">
-  <em>Transform your React components into professional product videos with AI.</em>
-  <br /><br />
-  <strong>7 Gemini 3 Integrations</strong> • <strong>Multi-Agent Architecture</strong> • <strong>Iterative AI Refinement</strong> • <strong>Auto-Updating Videos</strong>
-</p>
-
-<p align="center">
-  <a href="https://scenery-gemini3.fly.dev"><strong>🚀 Live Demo</strong></a> •
-  <a href="https://github.com/Arty2001/scenery-gemini3-hackathon"><strong>📦 Source Code</strong></a>
+  <a href="https://scenery-gemini3.fly.dev">Live Demo</a> ·
+  <a href="#gemini-3-integrations-8-total">8 Gemini Integrations</a> ·
+  <a href="#architecture-deep-dive">Architecture</a>
 </p>
 
 ---
 
-## Why Scenery is Different
+## What This Does
 
-### 🔄 Videos That Never Go Stale
+Point Scenery at a GitHub repo. It discovers your React components, renders them in a real browser, and generates professional demo videos—complete with cursor interactions, spring animations, and AI voiceover. When your components update, videos stay in sync.
 
-**The Problem:** Product videos become outdated the moment you ship a new version. Traditional video editing means re-recording, re-editing, and re-exporting every time your components change.
-
-**The Solution:** Scenery videos are **code-connected**. When your repo syncs, videos automatically update to reflect the latest component designs. Your documentation videos stay current without any manual work.
-
-```mermaid
-flowchart LR
-    A[Component Updated in Repo] --> B[Automatic Re-sync]
-    B --> C[Preview HTML Regenerated]
-    C --> D[Video Reflects Latest Design]
-    B --> E[Zero manual video editing required]
-
-    style A fill:#6366f1,color:#fff
-    style D fill:#22c55e,color:#fff
-```
-
-### 💬 Iterative AI Chat Refinement
-
-**The Problem:** Most AI tools give you one shot—you get output, and if it's not quite right, you start over. The "last 10%" of refinement is always manual.
-
-**The Solution:** Scenery's video editor includes an **AI chat interface** for iterative refinement. Don't like the timing? Ask to slow it down. Want more emphasis on a feature? Tell the AI. The multi-agent system refines the video based on your feedback—repeatedly—until it's exactly what you want.
-
-```mermaid
-flowchart TD
-    A["💬 User: 'Slow down transitions'"] --> B[Refinement Agent]
-    B --> C[Adjusts timing]
-    C --> D[Preview updated in real-time]
-    D --> E["💬 User: 'Add emphasis on loading'"]
-    E --> F[Scene Planner]
-    F --> G[Adds highlight animation]
-    G --> H[Preview updated]
-    H --> I{Perfect?}
-    I -->|No| A
-    I -->|Yes| J[✅ Final Video]
-
-    style A fill:#3b82f6,color:#fff
-    style E fill:#3b82f6,color:#fff
-    style J fill:#22c55e,color:#fff
-```
-
-**This solves the #1 frustration with AI tools:** the inability to make small adjustments without starting from scratch.
+**Built for the Gemini 3 Hackathon.**
 
 ---
 
-## Technical Execution
+## How It Works
 
-Scenery demonstrates **deep Gemini 3 integration** across the entire application stack—not as a bolt-on feature, but as the core intelligence powering every capability.
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              GITHUB REPO INPUT                                   │
+│                        (Any React/Next.js codebase)                              │
+└─────────────────────────────────────┬───────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        COMPONENT DISCOVERY PIPELINE                              │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐       │
+│  │  Scanner │ → │  Parser  │ → │ Gemini   │ → │  Props   │ → │ Preview  │       │
+│  │ glob tsx │   │ docgen   │   │ Categorize│   │ Generate │   │ Render   │       │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘       │
+│                                     ↓                             ↓              │
+│                            263 regex patterns           Playwright → SSR → AI   │
+│                            for server detection         (fallback chain)        │
+└─────────────────────────────────────┬───────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         VIDEO GENERATION PIPELINE                                │
+│                                                                                  │
+│   ┌────────────┐      ┌────────────┐      ┌────────────┐      ┌────────────┐    │
+│   │  DIRECTOR  │  →   │   SCENE    │  →   │  ASSEMBLY  │  →   │ REFINEMENT │    │
+│   │   AGENT    │      │  PLANNER   │      │   AGENT    │      │   AGENT    │    │
+│   │            │      │ (parallel) │      │            │      │            │    │
+│   │ Narrative  │      │  Element   │      │ Track      │      │  Score     │    │
+│   │ structure  │      │  positions │      │ composition│      │  0-100     │    │
+│   └────────────┘      └────────────┘      └────────────┘      └─────┬──────┘    │
+│                                                                      │           │
+│                                            ┌─────────────────────────┘           │
+│                                            │  Score < 90?                        │
+│                                            │  Apply fixes → Re-evaluate          │
+│                                            └─────────────────────────────────────│
+└─────────────────────────────────────┬───────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              REMOTION RENDER                                     │
+│                                                                                  │
+│        Timeline Editor  →  React Compositions  →  AWS Lambda  →  MP4/GIF        │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
-### 7 Distinct Gemini 3 Integrations
+---
 
-| # | Integration | Purpose |
-|---|-------------|---------|
-| 1 | **Categorization** | Structured JSON output for UI classification |
-| 2 | **Props Generation** | Context-aware props from repo context |
-| 3 | **Server→Client** | Transform async components to client-safe |
-| 4 | **Tailwind→CSS** | Inline style conversion for portable previews |
-| 5 | **AI Preview** | Fallback HTML generation with thinking mode |
-| 6 | **Multi-Agent System** | Director → Scene Planner → Assembly → Refine |
-| 7 | **TTS Voiceover** | Gemini 2.5 Flash with 5 voice options |
+## Gemini 3 Integrations (8 Total)
 
-### Integration 1: Component Categorization (Structured Output)
+Every integration uses structured output with JSON schemas. No prompt-and-pray.
 
+| # | Integration | Model | What It Does | Key Feature |
+|---|-------------|-------|--------------|-------------|
+| 1 | **Component Categorization** | Gemini 3 Pro | Classifies UI components (button, card, form, etc.) into 27 categories with video showcase strategy | `responseSchema` with Zod validation |
+| 2 | **Demo Props Generation** | Gemini 3 Pro | Generates realistic props from TypeScript interfaces | 3-tier fallback: Storybook → AI → defaults |
+| 3 | **Server→Client Transform** | Gemini 3 Pro | Converts async Server Components to client-safe code | Handles Prisma, Drizzle, next-auth, 15+ ORMs |
+| 4 | **Tailwind→Inline CSS** | Gemini 2.0 Flash | Converts all Tailwind classes to inline styles | Portable, framework-agnostic previews |
+| 5 | **AI Preview Fallback** | Gemini 3 Pro | Generates preview HTML when bundling fails | `thinkingBudget: 5000` for reasoning |
+| 6 | **Director Agent** | Gemini 3 Pro | Plans video narrative structure and scene breakdown | Function calling with `create_video_plan` |
+| 7 | **Scene Planner Agent** | Gemini 3 Pro | Designs element positions, animations, timing | 15+ tools, runs scenes in parallel |
+| 8 | **Refinement Agent** | Gemini 3 Pro | Scores composition quality (0-100), suggests fixes | Iterative loop until score ≥90 |
+| 9 | **TTS Voiceover** | Gemini 2.5 Flash TTS | Generates voiceover audio | `responseModalities: ['AUDIO']`, 5 voices |
+
+### Integration Code Examples
+
+**Structured Output (all integrations):**
 ```typescript
-// lib/component-discovery/analyzer.ts
+// lib/ai/video-generation/safe-generate.ts
 const response = await ai.models.generateContent({
   model: 'gemini-3-pro-preview',
-  contents: `Analyze this React component and categorize it.
-             Component: ${componentName}
-             Props Interface: ${JSON.stringify(propsInfo)}
-             Source Code Context: ${sourceSnippet}`,
+  contents: prompt,
   config: {
     responseMimeType: 'application/json',
-    responseSchema: {
-      type: 'OBJECT',
-      properties: {
-        category: {
-          type: 'STRING',
-          enum: ['button', 'card', 'form', 'input', 'navigation',
-                 'modal', 'table', 'chart', 'layout', 'media', 'other']
-        },
-        confidence: { type: 'NUMBER' },
-        reasoning: { type: 'STRING' }
-      }
-    }
+    responseSchema: toJsonSchema(zodSchema),  // Guarantees valid JSON
+    thinkingConfig: { thinkingBudget: 5000 }  // Extended reasoning
   }
 });
 ```
 
-**Why this matters:** Structured output ensures 100% parse success rate. Categories drive intelligent video scene selection—forms get typing animations, buttons get click effects.
-
-### Integration 2: Demo Props Generation (3-Tier Quality System)
-
-Scenery uses a **3-tier quality system** for demo props, prioritizing author-defined values:
-
-```mermaid
-flowchart TD
-    A[Component Needs Props] --> B{Storybook stories exist?}
-
-    B -->|Yes| T1["🥇 <b>TIER 1: Storybook Extraction</b><br/><i>Highest Quality</i><br/>• Detects .stories.tsx files<br/>• Parses CSF2/CSF3 formats<br/>• Uses author-defined args"]
-
-    B -->|No| C{AI generation succeeds?}
-
-    C -->|Yes| T2["🥈 <b>TIER 2: AI-Generated Props</b><br/><i>Medium Quality</i><br/>• Gemini analyzes TypeScript<br/>• Considers repo context<br/>• Realistic content"]
-
-    C -->|No| T3["🥉 <b>TIER 3: Type-Based Defaults</b><br/><i>Fallback</i><br/>• String → 'Example text'<br/>• Number → 42<br/>• Boolean → true"]
-
-    T1 --> D[Props Ready ✅]
-    T2 --> D
-    T3 --> D
-
-    style T1 fill:#22c55e,color:#fff
-    style T2 fill:#eab308,color:#000
-    style T3 fill:#f97316,color:#fff
-    style D fill:#6366f1,color:#fff
-```
-
-**Storybook Extraction:**
+**Function Calling (Director & Scene Planner):**
 ```typescript
-// lib/component-discovery/storybook-extractor.ts
-// Automatically finds and parses stories like:
-export const Primary: Story = {
-  args: {
-    variant: 'primary',
-    children: 'Click me',
-    disabled: false,
-  },
-};
-// → Extracts { variant: 'primary', children: 'Click me', disabled: false }
-```
-
-**AI Props Generation (when no Storybook):**
-```typescript
-// lib/component-discovery/analyzer.ts
-const response = await ai.models.generateContent({
-  model: 'gemini-3-pro-preview',
-  contents: `Generate realistic demo props for ${componentName}.
-             Repository: ${repoName} (use for brand context)
-             Props Interface: ${propsInterface}`,
-  config: {
-    responseMimeType: 'application/json',
-    responseSchema: propsSchema
-  }
-});
-```
-
-**Why this matters:** Author-defined Storybook props ensure components render exactly as intended, not with AI-guessed values.
-
-### Integration 3: Server Component Detection & Transformation (Structured Output)
-
-**The Problem:** Next.js Server Components use `async/await`, database calls, and Node.js APIs that crash in browsers. Most component preview tools fail on modern Next.js apps.
-
-**Our Solution:** A 3-stage pipeline that detects and transforms Server Components automatically:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  🔍 STAGE 1: Detection (190+ patterns)                          │
-│  Async, 'use server', Next.js imports, Database ORMs,           │
-│  Auth libraries, Node.js built-ins, Next.js 15 Promise params   │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  🤖 STAGE 2: AI Transformation (Gemini)                         │
-│  Remove async/await, replace DB calls with mock data,           │
-│  remove auth guards, transform Promise params                   │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  🧹 STAGE 3: Post-Transform Cleanup                             │
-│  Remove missed server imports, clean redirect/notFound          │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-                   ✅ Client-Safe Component
-```
-
-**Detection Implementation (190+ patterns):**
-```typescript
-// lib/component-discovery/ssr-preview.ts
-function isServerComponent(sourceCode: string): boolean {
-  // Skip if explicitly marked as client
-  if (/['"]use client['"]/.test(sourceCode)) return false;
-
-  const serverPatterns = [
-    // Async patterns
-    /export\s+default\s+async\s+function/,
-    /await\s+\w+[\.\(]/,
-
-    // Database libraries (15+ supported)
-    /from\s+['"]@prisma\/client['"]/,
-    /from\s+['"]drizzle-orm/,
-    /from\s+['"]mongoose['"]/,
-    /from\s+['"]@supabase\/supabase-js['"]/,
-    /prisma\.\w+\.(find|create|update|delete)/,
-
-    // Auth libraries (10+ supported)
-    /from\s+['"]next-auth/,
-    /from\s+['"]@clerk\/nextjs\/server['"]/,
-    /getServerSession/,
-    /\bauth\s*\(\s*\)/,
-
-    // Node.js built-ins
-    /from\s+['"]fs['"]/,
-    /from\s+['"]node:/,
-
-    // Next.js 15 async params
-    /params\s*:\s*Promise\s*</,
-    /await\s+params\b/,
-
-    // ... 170+ more patterns
-  ];
-
-  return serverPatterns.some(pattern => pattern.test(sourceCode));
-}
-```
-
-**Gemini Transformation:** Converts async components to client-safe versions by removing `await`, replacing database calls with mock data, and stripping auth guards—enabling Scenery to work with **any** Next.js 13/14/15 codebase.
-
-### Integration 4: Tailwind → Inline CSS Conversion
-
-For framework-agnostic, portable previews that render anywhere:
-
-```typescript
-// lib/component-discovery/ssr-preview.ts
-const response = await ai.models.generateContent({
-  model: 'gemini-3-pro-preview',
-  contents: `Convert all Tailwind classes to inline styles:
-
-INPUT:
-<button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm">
-  Click me
-</button>
-
-OUTPUT FORMAT:
-<button style="padding: 8px 16px; background-color: #3b82f6; color: white; ...">
-  Click me
-</button>
-
-Convert ALL classes. Preserve visual appearance exactly.`
-});
-```
-
-### Integration 5: AI Preview Fallback (Thinking Mode + Long Context)
-
-When component bundling fails, Gemini generates preview HTML from source code analysis:
-
-```typescript
-// lib/component-discovery/analyzer.ts
-const response = await ai.models.generateContent({
-  model: 'gemini-3-pro-preview',
-  contents: `Generate preview HTML for this React component.
-
-             Source Code:
-             ${fullComponentSource}
-
-             Demo Props:
-             ${JSON.stringify(demoProps)}
-
-             Generate the exact HTML that would render with these props.
-             Include all styling inline.`,
-  config: {
-    thinkingConfig: { thinkingBudget: 3000 }
-  }
-});
-```
-
-### Integration 6: Multi-Agent Video Generation (Function Calling)
-
-The crown jewel—a **4-agent orchestration system** using Gemini's function calling:
-
-```
-User: "Create a product video showing our auth flow"
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  🎬 DIRECTOR AGENT                                               │
-│  High-level narrative planning                                   │
-│  Tools: create_video_plan, select_components                     │
-│  Output: Scene breakdown, tone, pacing                          │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  🎨 SCENE PLANNER AGENT                                          │
-│  Detailed motion design (parallel execution)                     │
-│  Tools: design_scene, add_text, add_component, add_cursor        │
-│  Output: Complete scene specifications with timing              │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  🔧 ASSEMBLY AGENT                                               │
-│  Deterministic composition building                              │
-│  Convert to absolute frames, organize tracks by type            │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  ✨ REFINEMENT AGENT                                             │
-│  Quality scoring (0-100): Timing, Visual, Animation, Narrative  │
-│  If score < 90: Apply auto-fixes → Re-evaluate                  │
-└─────────────────────────────┬───────────────────────────────────┘
-                              ▼
-                    🎥 Final Video Composition
-```
-
-**Function Calling Tools:** Director uses `create_video_plan` for narrative structure, Scene Planner uses 10+ tools (`add_text_element`, `add_component`, `add_cursor_interaction`, etc.) for precise animation control.
-
-### Integration 7: Text-to-Speech Voiceover
-
-```typescript
-// lib/ai/tts.ts
-const response = await ai.models.generateContent({
-  model: 'gemini-2.5-flash-preview-tts',
-  contents: [{
-    parts: [{ text: narrationScript }]
-  }],
-  config: {
-    responseModalities: ['AUDIO'],
-    speechConfig: {
-      voiceConfig: {
-        prebuiltVoiceConfig: {
-          voiceName: 'Kore'  // Options: Kore, Charon, Fenrir, Aoede, Puck
+// lib/ai/video-generation/director-agent.ts
+const VIDEO_PLAN_TOOL = {
+  name: 'create_video_plan',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING },
+      scenes: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            type: { enum: ['intro', 'feature', 'tutorial', 'outro'] },
+            durationPercentage: { type: Type.NUMBER },
+            componentName: { type: Type.STRING },
+            animationIntensity: { enum: ['low', 'medium', 'high'] }
+          }
         }
       }
     }
   }
+};
+```
+
+**TTS Audio Generation:**
+```typescript
+// lib/ai/tts.ts
+const response = await ai.models.generateContent({
+  model: 'gemini-2.5-flash-preview-tts',
+  contents: [{ role: 'user', parts: [{ text: narrationScript }] }],
+  config: {
+    responseModalities: ['AUDIO'],
+    speechConfig: {
+      voiceConfig: {
+        prebuiltVoiceConfig: { voiceName: 'Kore' }  // or Charon, Fenrir, Aoede, Puck
+      }
+    }
+  }
+});
+```
+
+---
+
+## Architecture Deep Dive
+
+### Component Discovery Pipeline
+
+**Location:** `lib/component-discovery/`
+
+#### 1. Scanner (`scanner.ts`)
+- Globs `**/*.tsx` and `**/*.jsx`, excludes node_modules, tests, stories
+- Returns file paths for parsing
+
+#### 2. Parser (`parser.ts`)
+- Primary: `react-docgen-typescript` extracts typed props
+- Fallback: Regex-based parser for async components, arrow functions
+- Handles compound components (`Card.Header`, `Form.Field`)
+
+#### 3. Server Component Detection (`ssr-preview.ts`)
+**263 regex patterns** across 15 categories:
+
+| Category | Example Patterns | Count |
+|----------|------------------|-------|
+| Async | `export default async function`, `await` | 4 |
+| Database ORMs | Prisma, Drizzle, Mongoose, Supabase, pg, mysql2 | 21 |
+| Auth Libraries | next-auth, @clerk/nextjs/server, lucia | 8 |
+| Node.js Built-ins | fs, path, crypto, child_process | 12 |
+| Next.js Server | next/headers, cookies(), redirect() | 10 |
+| File System | readFileSync, writeFile, existsSync | 6 |
+| And 9 more... | Email, payment, CMS, analytics, tRPC | ~200 |
+
+If detected as server component → Gemini transforms to client-safe code.
+
+#### 4. Preview Rendering (3-tier fallback)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  TIER 1: Playwright Browser Rendering (95% accuracy)           │
+│  • Bundles with esbuild (50+ library mocks)                    │
+│  • Renders in real Chromium on Fly.io worker                   │
+│  • 4-attempt recovery with progressive simplification          │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │ Fails?
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TIER 2: Server-Side Rendering (70% accuracy)                  │
+│  • renderToStaticMarkup via esbuild                            │
+│  • 5-second timeout                                            │
+└─────────────────────────────┬───────────────────────────────────┘
+                              │ Fails?
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TIER 3: AI-Only Generation (50% accuracy)                     │
+│  • Gemini generates HTML from source code                      │
+│  • thinkingBudget: 5000 tokens                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 5. Tailwind Conversion
+All classes converted to inline styles for portable, framework-agnostic previews.
+
+---
+
+### Video Generation Pipeline
+
+**Location:** `lib/ai/video-generation/`
+
+#### Director Agent (`director-agent.ts`)
+Creates high-level video plan with narrative structure.
+
+**Frame Budget Formula:**
+```
+totalFrames = durationSeconds × 30
+├── Hook:     15% of frames
+├── Setup:    15% of frames
+├── Showcase: 55% of frames
+└── CTA:      15% of frames
+```
+
+**Scene Types:**
+| Type | Min Frames | Max Frames | Purpose |
+|------|-----------|-----------|---------|
+| intro | 60 | 120 | Hook + title |
+| feature | 120 | 240 | Showcase component |
+| tutorial | 180 | 360 | Interactive demo |
+| transition | 15 | 30 | Scene connector |
+| outro | 60 | 90 | CTA + closing |
+
+#### Scene Planner Agent (`scene-planner-agent.ts`)
+Translates intents to concrete specifications. **Runs all scenes in parallel.**
+
+**Critical Concept — Relative Keyframes:**
+```typescript
+// WRONG: 10 seconds to fade in
+{ frame: 0, opacity: 0 }, { frame: 300, opacity: 1 }
+
+// RIGHT: 0.67 seconds to fade in
+{ frame: 0, opacity: 0 }, { frame: 20, opacity: 1 }
+// Frame 0 = when THIS element appears, NOT video start
+```
+
+**Layer Order (z-index):**
+```
+0: background   (gradients, solid fills)
+1: shapes       (rectangles, circles)
+2: device-frames (phone, laptop containers)
+3: components   (React UI components)
+4: text         (all text overlays)
+5: cursor       (tutorial cursor, always on top)
+```
+
+**Spring Animation Presets:**
+| Preset | Damping | Stiffness | Mass | Use Case |
+|--------|---------|-----------|------|----------|
+| smooth | 200 | 100 | 1 | Professional |
+| snappy | 200 | 200 | 0.5 | Quick, responsive |
+| heavy | 200 | 80 | 5 | Slow, dramatic |
+| bouncy | 100 | 150 | 1 | Playful |
+| gentle | 300 | 60 | 2 | Soft, subtle |
+
+#### Assembly Agent (`assembly-agent.ts`)
+**Deterministic (no LLM).** Transforms detailed scenes into editor-ready composition.
+
+- Fixes keyframe timing mistakes (rescales if max frame > 90)
+- Normalizes keyframe format for editor
+- Organizes tracks by z-order
+- Validates composition (no empty items, items within duration)
+
+#### Refinement Agent (`refinement-agent.ts`)
+Quality verification with scoring loop.
+
+**Scoring Weights:**
+| Category | Weight | What It Measures |
+|----------|--------|------------------|
+| Visual Composition | 30% | Positioning, hierarchy, no overlaps |
+| Timing | 25% | Min 90 frames on screen, smooth transitions |
+| Narrative Flow | 25% | Intro→Setup→Showcase→CTA structure |
+| Animation Quality | 15% | Spring animations, stagger effects |
+| Accessibility | 5% | Readable text, contrast ratios |
+
+**Score Thresholds:**
+| Score | Action |
+|-------|--------|
+| 90-100 | Ship it |
+| 75-89 | Apply 1-2 fixes |
+| 60-74 | Apply 3-5 fixes |
+| 40-59 | Major patches + manual review |
+| 0-39 | Regenerate from Director |
+
+---
+
+## Technical Decisions
+
+### Why 263 Regex Patterns?
+
+Next.js 13+ Server Components use async/await, database calls, and Node.js APIs that crash in browsers. We detect **every pattern** that makes a component server-only:
+
+```typescript
+// lib/component-discovery/ssr-preview.ts
+const serverPatterns = [
+  /export\s+default\s+async\s+function/,
+  /from\s+['"]@prisma\/client['"]/,
+  /from\s+['"]drizzle-orm/,
+  /from\s+['"]next-auth/,
+  /from\s+['"]@clerk\/nextjs\/server['"]/,
+  /params\s*:\s*Promise\s*</,  // Next.js 15 async params
+  // ... 257 more
+];
+```
+
+### Why Fly.io Playwright Workers?
+
+Component preview rendering needs real browser execution for accuracy. Playwright in a container gives us:
+
+- Headless Chromium with full CSS/JS support
+- Isolated from main app (scales independently)
+- Bearer token authentication
+- Health checks and connection reuse
+
+```typescript
+// playwright-worker/src/server.ts
+app.post('/render', async (req) => {
+  const { bundledJs, componentName, props, timeout } = req.body;
+  const page = await browser.newPage();
+  await page.setContent(htmlTemplate);
+  await page.evaluate(bundledJs);
+  return await page.screenshot();
+});
+```
+
+### Why Self-Improving Refinement Loop?
+
+First-pass AI output is rarely perfect. The refinement loop:
+
+1. Scores composition against 5 weighted criteria
+2. If score < 90, identifies specific issues with fix recipes
+3. Applies auto-fixes
+4. Re-evaluates
+5. Picks best version across all iterations
+
+**Top 5 Failure Modes & Fixes:**
+| Issue | Detection | Fix |
+|-------|-----------|-----|
+| Text overlapping component | Text at y: 0.4-0.6 when component at y: 0.5 | Move text to y: 0.10 |
+| Animation too fast | Entrance in < 10 frames | Extend to 15 frames |
+| Elements appearing simultaneously | Same offsetFrames | Add 12-frame stagger |
+| Component not visible | Overflows device frame | Switch to larger frame |
+| No clear narrative | Missing intro/outro | Flag for regeneration |
+
+### Why Structured Output with Zod?
+
+Every Gemini call uses JSON schema with Zod validation:
+
+```typescript
+// lib/ai/video-generation/safe-generate.ts
+const result = await safeGenerate({
+  schema: refinementResultSchema,  // Zod schema
+  prompt: analysisPrompt,
+  maxRetries: 2,
+  thinkingBudget: 5000
 });
 
-// Returns WAV audio buffer for video composition
-const audioBuffer = response.candidates[0].content.parts[0].inlineData.data;
+// If Zod validation fails, error is appended to prompt for retry
+// 3 total attempts before giving up
 ```
 
-### Gemini 3 Features Utilized
+Benefits:
+- 100% parse success (no malformed JSON)
+- Type inference from schema
+- Automatic retry with error feedback
 
-| Feature | Implementation | Purpose |
-|---------|---------------|---------|
-| **Structured Output** | JSON schemas in all 7 integrations | 100% parse reliability |
-| **Function Calling** | 15+ tools across 4 agents | Precise video composition |
-| **Thinking Mode** | Server→Client, AI Preview | Complex reasoning tasks |
-| **Streaming** | Chat interface | Real-time responses |
-| **Long Context** | Full source code analysis | Accurate prop generation |
-| **TTS** | Voiceover generation | Professional narration |
+### Why 4-Attempt Render Recovery?
 
-### Code Quality Indicators
+Component rendering fails for many reasons. Progressive simplification:
 
-- **TypeScript**: Full type safety across 50+ modules
-- **Error Handling**: Graceful fallback chain (Playwright → SSR → AI)
-- **Scalability**: Deployed on Fly.io with auto-scaling workers
-- **Testing**: Component rendering validated in real Chromium
+| Attempt | Strategy | What It Does |
+|---------|----------|--------------|
+| 1 | `fix-props` | Analyze error, add missing definitions |
+| 2 | `simplify` | Remove complex nested objects, use flat structures |
+| 3 | `minimal` | Aggressive mocking, all required props only |
+| 4 | `minimal` | Placeholder div, mock ALL external calls |
+| 5+ | `skip` | Mark as unfixable, move on |
 
----
-
-## Professional Video Editor
-
-Scenery includes a **full-featured video editor**—not a simplified wizard, but a professional timeline-based tool:
-
-### 30+ Animation Presets
-
-```
-ENTRANCE ANIMATIONS          EXIT ANIMATIONS           EMPHASIS EFFECTS
-├─ fade-in                   ├─ fade-out               ├─ pulse
-├─ slide-in-left/right/up/down ├─ zoom-out            ├─ shake
-├─ zoom-in                   ├─ blur-out               ├─ wiggle
-├─ bounce                    └─ slide-out              ├─ heartbeat
-├─ elastic                                             ├─ jello
-├─ spring-pop                MOTION EFFECTS            └─ glow
-├─ blur-in                   ├─ float
-├─ flip-in                   ├─ drift-right            FILTER EFFECTS
-└─ rotate-in                 └─ ken-burns-zoom         ├─ color-pop
-                                                       ├─ flash
-                                                       ├─ hue-shift
-                                                       └─ cinematic-focus
-```
-
-### 6 Cursor Interaction Types
-
-Simulate realistic user interactions with AI-generated cursor movements:
-
-| Action | Description | Use Case |
-|--------|-------------|----------|
-| `click` | Click animation on target element | Buttons, links, toggles |
-| `hover` | Hover state trigger | Dropdowns, tooltips, hover effects |
-| `type` | Character-by-character typing | Form inputs, search bars |
-| `focus` | Focus ring animation | Form fields, accessibility demos |
-| `select` | Dropdown/option selection | Select menus, radio buttons |
-| `check` | Checkbox toggle | Form checkboxes, settings |
-
-### 6 Particle Effect Types
-
-Add visual polish with customizable particle systems:
-
-| Effect | Properties |
-|--------|------------|
-| **Confetti** | Celebration moments, success states |
-| **Sparks** | Highlight interactions, emphasis |
-| **Snow** | Ambient background effects |
-| **Bubbles** | Playful, light themes |
-| **Stars** | Premium, magical feel |
-| **Dust** | Subtle ambient motion |
-
-Each supports: gravity, spread angle, speed, particle count, colors.
-
-### Device Frame Mockups
-
-Present components in context with professional device frames:
-
-```
-┌─────────────────┐  ┌─────────────────────────────┐  ┌───────────────────────┐
-│    📱 Phone     │  │        💻 Laptop            │  │    🖥️ Full Screen     │
-│                 │  │                             │  │                       │
-│   Mobile-first  │  │   Desktop context with      │  │   Edge-to-edge        │
-│   demos with    │  │   browser chrome, perfect   │  │   for hero sections   │
-│   realistic     │  │   for landing pages         │  │   and full-width      │
-│   touch zones   │  │                             │  │   components          │
-└─────────────────┘  └─────────────────────────────┘  └───────────────────────┘
-```
-
-### Timeline Features
-
-| Feature | Description |
-|---------|-------------|
-| **Multi-track editing** | Separate tracks for text, video, audio, components, cursors, shapes, particles |
-| **Zoom control** | 0.1x to 10x zoom with fit-to-view |
-| **Snap-to-points** | Auto-snap to clip edges, playhead, timeline start |
-| **Real-time preview** | Instant playback via Remotion |
-| **Auto-save** | Compositions save automatically with status indicator |
-| **Keyframe animation** | Custom keyframes for position, scale, rotation, opacity, filters |
-
-### Shape & Graphics Elements
-
-- **Rectangles, circles, lines** with gradients and stroke
-- **Dividers and badges** for professional layouts
-- **Custom SVG** with viewBox support
-
-### Additional Features
-
-- **Animated Gradients**: Linear, radial, conic gradients with rotation animation
-- **Text Effects**: Gradient fill, glow, and glass effects for text
-- **Spring Physics**: 6 presets (smooth, snappy, heavy, bouncy, gentle, wobbly)
-- **Word-by-Word Animation**: Animate text letter-by-letter or word-by-word
-
----
-
-## Competitive Landscape
-
-| Feature | Scenery | Remotion | Storybook | Arcade | Synthesia |
-|---------|:-------:|:--------:|:---------:|:------:|:---------:|
-| **Auto Component Discovery** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **Code-Connected (Auto-Update)** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **AI Chat Refinement** | ✅ | ⚠️ Partial | ❌ | ❌ | ❌ |
-| **Multi-Agent Orchestration** | ✅ 4 agents | ❌ | ❌ | ❌ | ❌ |
-| **Server Component Support** | ✅ 190+ patterns | ❌ | ⚠️ Limited | N/A | N/A |
-| **Live Component Rendering** | ✅ Playwright | Manual | ✅ Docs only | ❌ | ❌ |
-| **TTS Voiceover** | ✅ 5 voices | Manual | ❌ | ❌ | ✅ |
-| **Cursor Interactions** | ✅ AI-generated | Manual | ❌ | Manual | ❌ |
-| **Export to Video** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **React-Specific** | ✅ | ✅ | ✅ | ❌ | ❌ |
-
-**Key insight:** Existing tools make you choose between automated video (Synthesia), component docs (Storybook), or code-based video (Remotion). Scenery combines all three with AI orchestration and auto-updating capability.
-
----
-
-## Architecture
-
-```
-                         📦 GitHub Repo (Any React)
-                                    │
-                                    ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    🔍 COMPONENT DISCOVERY PIPELINE                         │
-│                                                                           │
-│   Clone Repo ──▶ Parse TypeScript ──▶ Categorize (Gemini) ──▶ Gen Props  │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    🖼️ PREVIEW GENERATION                                   │
-│                                                                           │
-│   Server Component Detection (190+ patterns)                              │
-│              ▼                                                            │
-│   Transform to Client (Gemini)                                            │
-│              ▼                                                            │
-│   Playwright (95%) ──▶ SSR (70%) ──▶ AI-Only (50%)                       │
-│              ▼                                                            │
-│   Tailwind → Inline CSS (Gemini)                                         │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    🤖 MULTI-AGENT VIDEO GENERATION                         │
-│                                                                           │
-│   Director ──▶ Scene Planner ──▶ Assembly ──▶ Refinement ──┐             │
-│                                                    ▲       │ (if < 90)   │
-│   💬 AI Chat (iterate instantly) ─────────────────┘       └──┘           │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    ▼
-                    🎙️ TTS Engine (Gemini 2.5)
-                                    ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    🎥 VIDEO COMPOSITION                                    │
-│                                                                           │
-│   Remotion Engine ──▶ Timeline Editor ──▶ Lambda Export (MP4/GIF)        │
-└───────────────────────────────────┬───────────────────────────────────────┘
-                                    ▼
-┌───────────────────────────────────────────────────────────────────────────┐
-│                    🔄 AUTO-SYNC LOOP                                       │
-│                                                                           │
-│   Repo Updated ──▶ Re-discover ──▶ Preview Regenerated ──▶ Videos Update │
-└───────────────────────────────────────────────────────────────────────────┘
+```typescript
+// lib/component-discovery/render-recovery.ts
+const failureCount = incrementFailureCount(componentName);
+if (failureCount >= 5) return { shouldSkip: true };
 ```
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| **AI** | Gemini 3 Pro, Gemini 2.5 Flash TTS | All 7 AI integrations |
-| **Frontend** | Next.js 15, React 19, TypeScript | Production SPA |
-| **Video Engine** | [Remotion](https://remotion.dev) | React-based video composition |
-| **Video Export** | Remotion Lambda (AWS) | Serverless MP4/GIF rendering |
-| **Editor** | Custom timeline, 30+ animations | Professional video editing |
-| **Component Rendering** | Playwright, esbuild | Real browser previews |
-| **Database** | Supabase (Postgres) | Project + component storage |
-| **Hosting** | Fly.io (2 apps, auto-scale) | Production deployment |
+| Layer | Technology | Why |
+|-------|------------|-----|
+| AI | Gemini 3 Pro, Gemini 2.5 Flash TTS | 8 integrations, structured output, function calling, TTS |
+| Frontend | Next.js 15, React 19 | App Router, Server Actions, React 19 features |
+| Video Engine | Remotion 4 | React-based video composition, spring physics |
+| Video Export | Remotion Lambda | Parallelized AWS Lambda rendering |
+| Component Preview | Playwright, esbuild | Real browser rendering, fast bundling |
+| State | Zustand + Zundo | Lightweight state with undo/redo |
+| Forms | React Hook Form + Zod | Type-safe validation |
+| Database | Supabase (PostgreSQL) | Auth, projects, compositions |
+| Hosting | Fly.io | 2 apps (main + playwright worker), auto-scale |
+| UI | shadcn/ui + Radix | Accessible components |
 
 ---
 
-## DevOps & Infrastructure
+## Getting Started
 
-Scenery runs on a **multi-service cloud architecture** designed for scalability and cost efficiency.
+### Prerequisites
+- Node.js 20+
+- npm or yarn
+- Supabase account
+- Gemini API key
 
-### Deployment Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              ☁️ FLY.IO                                       │
-│                                                                             │
-│   scenery-gemini3 (Main App)          scenery-playwright (Worker)          │
-│   • Next.js 15                    ◄──HTTP──►  • Playwright + Chrome         │
-│   • 2GB RAM, auto-scale 1-5                   • 2GB RAM, scales to 0       │
-└───────────────────────────────────────┬─────────────────────────────────────┘
-                                        │
-          ┌─────────────────────────────┼─────────────────────────────┐
-          ▼                             ▼                             ▼
-┌─────────────────────────┐   ┌─────────────────────────┐   ┌─────────────────────────┐
-│      ☁️ AWS              │   │      ☁️ AWS              │   │      🗄️ SUPABASE        │
-│                         │   │                         │   │                         │
-│   Remotion Lambda       │   │   S3 Bucket             │   │   PostgreSQL            │
-│   • Serverless render   │   │   • Remotion bundle     │   │   • User auth           │
-│   • 2GB, 900s timeout   │   │   • Video output        │   │   • Projects            │
-│   • MP4, GIF, WebM      │   │                         │   │   • Compositions        │
-└─────────────────────────┘   └─────────────────────────┘   └─────────────────────────┘
-```
-
-### Service Details
-
-| Service | Purpose | Specs | Cost |
-|---------|---------|-------|------|
-| **Fly.io Main App** | Next.js application, API routes, AI orchestration | 2GB RAM, auto-scale 1-5 | ~$15/mo |
-| **Fly.io Playwright Worker** | Browser-based component rendering | 2GB RAM, scales to 0 when idle | ~$6/mo |
-| **Remotion Lambda** | Serverless video export to MP4/GIF | 2GB RAM, 900s timeout, parallelized | Pay per render |
-| **AWS S3** | Remotion bundle hosting, video output storage | Standard tier | ~$2/mo |
-| **Supabase** | PostgreSQL, Auth, Storage | Free tier sufficient | $0 |
-
-### Why Remotion?
-
-[Remotion](https://remotion.dev) is a React-based video creation framework that powers Scenery's video engine:
-
-- **React-Native Composition**: Videos are React components with props, state, and hooks
-- **Frame-Perfect Control**: Every frame is a React render—predictable and debuggable
-- **Spring Physics**: Built-in spring animations for natural, organic motion
-- **AWS Lambda Export**: Parallelized rendering—60s video renders in ~30 seconds
-- **TypeScript**: Full type safety for video composition
-
-```typescript
-// Example: Remotion composition structure
-const MyVideo: React.FC = () => {
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 30], [0, 1]);
-
-  return (
-    <AbsoluteFill style={{ opacity }}>
-      <Component {...demoProps} />
-    </AbsoluteFill>
-  );
-};
-```
-
----
-
-## Quick Start
+### Local Development
 
 ```bash
 # Clone
@@ -617,27 +440,163 @@ npm install
 
 # Configure
 cp .env.example .env.local
-# Add: GEMINI_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY
 
 # Run
-npm run dev
+npm run dev  # http://localhost:3000
+```
+
+### Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build |
+| `npm run lint` | ESLint check |
+| `npm run deploy:remotion` | Deploy Remotion Lambda |
+
+---
+
+## Environment Variables
+
+```bash
+# REQUIRED
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+GEMINI_API_KEY=your_gemini_api_key
+
+# OPTIONAL: Cloud video rendering
+REMOTION_AWS_REGION=us-east-1
+REMOTION_LAMBDA_FUNCTION_NAME=remotion-render-function
+REMOTION_SERVE_URL=https://your-remotion-serve-url.com
+
+# OPTIONAL: Accurate preview rendering
+PLAYWRIGHT_WORKER_URL=https://scenery-playwright.fly.dev
+PLAYWRIGHT_WORKER_SECRET=your_shared_secret
 ```
 
 ---
 
-## Links
+## Project Structure
 
-| Resource | URL |
-|----------|-----|
-| **Live Demo** | [scenery-gemini3.fly.dev](https://scenery-gemini3.fly.dev) |
-| **Source Code** | [github.com/Arty2001/scenery-gemini3-hackathon](https://github.com/Arty2001/scenery-gemini3-hackathon) |
+```
+scenery/
+├── app/                          # Next.js App Router
+│   ├── api/
+│   │   ├── ai/chat/              # Main chat + video generation (streaming)
+│   │   ├── ai/process-html/      # HTML processing (Tailwind→CSS)
+│   │   ├── ai/tts/               # Text-to-speech voiceover
+│   │   ├── projects/[id]/        # Project CRUD + component discovery
+│   │   └── export/progress/      # Video render job tracking
+│   ├── auth/                     # Supabase auth flows
+│   └── protected/                # Dashboard, editor, projects
+│
+├── lib/
+│   ├── ai/
+│   │   ├── client.ts             # Gemini client (singleton, 900s timeout)
+│   │   ├── models.ts             # Model selection (Pro, Flash, TTS)
+│   │   ├── tts.ts                # Voiceover generation
+│   │   └── video-generation/
+│   │       ├── orchestrator.ts   # 4-stage pipeline coordinator
+│   │       ├── director-agent.ts # Narrative planning
+│   │       ├── scene-planner-agent.ts # Detail specification
+│   │       ├── assembly-agent.ts # Composition building
+│   │       ├── refinement-agent.ts # Quality scoring loop
+│   │       ├── safe-generate.ts  # Retry + Zod validation
+│   │       └── shared-constants.ts # Glossary, design tokens
+│   │
+│   ├── component-discovery/
+│   │   ├── scanner.ts            # Find .tsx files
+│   │   ├── parser.ts             # Extract props (docgen + fallback)
+│   │   ├── analyzer.ts           # Gemini categorization + props gen
+│   │   ├── ssr-preview.ts        # Server detection (263 patterns)
+│   │   ├── playwright-client.ts  # HTTP client to worker
+│   │   ├── browser-bundler.ts    # esbuild with 50+ mocks
+│   │   ├── render-recovery.ts    # 4-attempt progressive simplification
+│   │   └── storybook-extractor.ts # CSF2/CSF3 story args
+│   │
+│   ├── composition/
+│   │   ├── types.ts              # Track, Item, Animation types
+│   │   ├── store.ts              # Zustand state
+│   │   └── schema.ts             # Zod validation
+│   │
+│   └── actions/                  # Server actions
+│       ├── projects.ts           # Project CRUD
+│       ├── components.ts         # Component management
+│       └── export.ts             # Remotion Lambda export
+│
+├── components/
+│   ├── remotion/                 # Video composition
+│   │   ├── compositions/         # Remotion React components
+│   │   ├── animation/            # Spring physics
+│   │   └── transitions/          # Scene transitions
+│   ├── video-editor/             # Timeline editor UI
+│   ├── chat/                     # AI chat interface
+│   └── ui/                       # shadcn/ui components
+│
+├── playwright-worker/            # Separate Fly.io app
+│   ├── src/server.ts             # Fastify + auth
+│   └── src/renderer.ts           # Chromium management
+│
+└── supabase/migrations/          # 16 SQL migrations
+```
+
+---
+
+## Limitations & Known Issues
+
+### Current Limitations
+
+| Limitation | Reason | Workaround |
+|------------|--------|------------|
+| **React-only** | Parsing relies on react-docgen-typescript | No Vue/Svelte support planned |
+| **Public repos only** | GitHub OAuth scopes not requested | Private repo support possible with token |
+| **English TTS only** | Gemini TTS limitation | N/A |
+| **No live preview editing** | Remotion player is read-only | Edit in timeline, preview renders |
+| **30fps fixed** | Simplifies frame math | Could be configurable |
+
+### Known Issues
+
+| Issue | Impact | Status |
+|-------|--------|--------|
+| Rate limits on heavy usage | Gemini API quota exhaustion | Added fail-fast detection |
+| Complex components may fail to render | Some edge cases in bundling | 4-attempt recovery helps |
+| Server components with dynamic imports | Not all patterns detected | Add patterns as discovered |
+| Large repos slow to scan | Many files = slow glob | Consider incremental scanning |
+
+### Not Implemented
+
+- **Collaborative editing** — Single user only
+- **Version history** — No composition versioning
+- **Custom fonts** — Uses Google Fonts via Remotion
+- **Audio tracks** — Voiceover only, no music
+
+---
+
+## Deployment
+
+### Fly.io (Recommended)
+
+```bash
+# Main app
+fly launch
+fly secrets set GEMINI_API_KEY=xxx SUPABASE_URL=xxx SUPABASE_ANON_KEY=xxx
+
+# Playwright worker (separate app)
+cd playwright-worker
+fly launch
+fly secrets set WORKER_SECRET=xxx
+```
+
+### Remotion Lambda
+
+```bash
+npm run deploy:remotion
+# Follow Remotion Lambda setup: https://remotion.dev/docs/lambda/setup
+```
 
 ---
 
 <p align="center">
-  <strong>Built with Gemini 3 Pro</strong>
-  <br />
-  <sub>Google DeepMind Gemini 3 Hackathon 2026</sub>
-  <br /><br />
-  Built by <strong>Athavan Thambimuthu</strong>
+  <strong>Built for the Gemini 3 Hackathon</strong><br>
+  <sub>by Athavan Thambimuthu</sub>
 </p>

@@ -42,7 +42,7 @@ export function HeroSection() {
             href="/protected"
             className="rounded-full bg-white text-black font-semibold px-8 py-3 text-base hover:bg-zinc-200 transition-colors"
           >
-            Open Editor
+            Try Demo
           </Link>
           <a
             href="#how-it-works"

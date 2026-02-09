@@ -10,8 +10,8 @@
  * Anonymous users can view these projects' components without signing in.
  */
 export const DEMO_PROJECT_IDS: string[] = [
-  // Add demo project IDs here
-  // Example: '143e32d0-cb26-4602-ae3e-2a664676565d'
+  'bcbe06ed-a926-41d9-bc6a-dbbb714ece76',
+  '3bee8301-9771-4436-b95f-38317b9ac4f9',
 ]
 
 /**
