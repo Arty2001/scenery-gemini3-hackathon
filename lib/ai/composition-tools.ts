@@ -2204,7 +2204,7 @@ const handlers = new Map<string, ToolHandler>([
         // Set defaults based on role
         let fontSize = textConfig.fontSize;
         let fontWeight = textConfig.fontWeight;
-        let posY = textConfig.positionY ?? 0.5;
+        const posY = textConfig.positionY ?? 0.5;
 
         if (!fontSize) {
           switch (textConfig.role) {

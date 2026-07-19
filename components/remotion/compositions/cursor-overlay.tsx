@@ -83,7 +83,6 @@ function findTargetPosition(
         y += offset.y;
       }
 
-      console.log(`[CursorOverlay] Resolved target "${selector}" to (${x.toFixed(0)}, ${y.toFixed(0)})`);
       return { x, y };
     }
   } catch (err) {
@@ -377,7 +376,7 @@ export function CursorOverlay({ item }: CursorOverlayProps) {
     if (isNaN(y) || !isFinite(y)) y = compHeight / 2;
 
     // Ensure frame is a valid number (critical for interpolation!)
-    let frameNum = typeof kf.frame === 'number' && isFinite(kf.frame) ? kf.frame : index * 30;
+    const frameNum = typeof kf.frame === 'number' && isFinite(kf.frame) ? kf.frame : index * 30;
 
     return { frame: frameNum, x, y, click: kf.click };
   });

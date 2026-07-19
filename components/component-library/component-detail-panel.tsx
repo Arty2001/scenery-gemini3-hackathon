@@ -58,7 +58,6 @@ export function ComponentDetailPanel({
   // Generate preview with custom props (debounced)
   const regeneratePreview = useCallback(async (props: Record<string, unknown>) => {
     if (!component?.id) {
-      console.log('[live-preview] No component ID, skipping');
       return;
     }
 
