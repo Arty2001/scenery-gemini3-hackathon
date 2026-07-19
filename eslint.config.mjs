@@ -10,6 +10,10 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    // Standalone package with its own tsconfig, deps and build (`cd playwright-worker && npm run build`).
+    ignores: ["playwright-worker/**", ".next/**", "dist/**"],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 
