@@ -12,6 +12,10 @@ primary_region = 'iad'
 
 [build]
 
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they
+# cannot be secrets. The Supabase key below is the publishable anon key, which is
+# safe to ship publicly — access is enforced by row-level security. Real secrets
+# (GEMINI_API_KEY, PLAYWRIGHT_WORKER_SECRET) go through `fly secrets set`.
 [env]
   NODE_ENV = 'production'
   REPOS_BASE_DIR = '/data/repos'

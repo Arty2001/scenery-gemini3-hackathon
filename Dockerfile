@@ -18,10 +18,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build Next.js - NEXT_PUBLIC_ vars must be available at build time
+# Build Next.js - NEXT_PUBLIC_ vars must be available at build time.
+# These are inlined into the client bundle, so they are never secrets: the
+# Supabase key below is the publishable anon key, gated by row-level security.
+# Override with --build-arg to point a fork at your own Supabase project.
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_SUPABASE_URL=https://gtvcigyldfjrwzqeymes.supabase.co
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0dmNpZ3lsZGZqcnd6cWV5bWVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjg0MTIsImV4cCI6MjA4NDk0NDQxMn0.u3BhSqpgCMkeFvR1rOWsCZyZVpqkZylFO0sUYkLqdT4
+ARG NEXT_PUBLIC_SUPABASE_URL=https://gtvcigyldfjrwzqeymes.supabase.co
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0dmNpZ3lsZGZqcnd6cWV5bWVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjg0MTIsImV4cCI6MjA4NDk0NDQxMn0.u3BhSqpgCMkeFvR1rOWsCZyZVpqkZylFO0sUYkLqdT4
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 RUN npm run build
 
 # Production image
